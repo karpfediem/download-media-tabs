@@ -111,7 +111,7 @@ function setDisabled(el, disabled) {
 
 // ---------- Tabs (accessible) ----------
 
-const tabIds = ["general", "after", "detection", "performance", "about"];
+const tabIds = ["general", "after", "detection", "performance", "theme", "presets", "about"];
 function initTabs() {
     const tabs = tabIds.map(id => ({
         tab: $(`tab-${id}`),
@@ -181,6 +181,7 @@ function applyTheme(theme) {
 // ---------- Load / Save ----------
 
 function load() {
+    IS_LOADING = true;
     chrome.storage.sync.get(DEFAULTS, (cfg) => {
         // General
         $("scope").value           = cfg.scope || DEFAULTS.scope;
@@ -239,16 +240,20 @@ function load() {
         $("excludeUrlSubstrings").value = (filters.excludeUrlSubstrings || []).join("\n");
 
         reflectFiltersEnabledState();
+        updatePatternPreview();
+
+        // Update baseline and save button
+        LAST_SAVED = cfg;
+        IS_LOADING = false;
+        updateSaveEnabled();
     });
 }
 
-function save() {
+function buildConfigFromUI() {
     const filtersEnabled = $("filtersEnabled").checked;
-
     const minBytes = bytesFrom($("minSizeValue").value, $("minSizeUnit").value);
     const maxBytes = bytesFrom($("maxSizeValue").value, $("maxSizeUnit").value);
-
-    const cfg = {
+    return {
         // General
         scope: $("scope").value,
         filenamePattern: $("filenamePattern").value.trim() || DEFAULTS.filenamePattern,
@@ -298,10 +303,47 @@ function save() {
             excludeUrlSubstrings: linesToArray($("excludeUrlSubstrings").value, { trim: true, lower: false })
         }
     };
+}
 
+let LAST_SAVED = null;
+let IS_LOADING = false;
+
+function stableStringify(value) {
+    const seen = new WeakSet();
+    function helper(v) {
+        if (v === null || typeof v !== 'object') return v;
+        if (seen.has(v)) return undefined; // avoid cycles (shouldn't exist here)
+        seen.add(v);
+        if (Array.isArray(v)) return v.map(helper);
+        const keys = Object.keys(v).sort();
+        const out = {};
+        for (const k of keys) out[k] = helper(v[k]);
+        return out;
+    }
+    return JSON.stringify(helper(value));
+}
+
+function isEqual(a, b) {
+    try { return stableStringify(a) === stableStringify(b); } catch { return false; }
+}
+
+function updateSaveEnabled() {
+    if (IS_LOADING) return;
+    const btn = $("save");
+    if (!btn) return;
+    const current = pickSettingsOnly(buildConfigFromUI());
+    const baseline = pickSettingsOnly(LAST_SAVED || {});
+    const changed = !isEqual(current, baseline);
+    btn.disabled = !changed;
+}
+
+function save() {
+    const cfg = buildConfigFromUI();
     chrome.storage.sync.set(cfg, () => {
         if (cfg.theme) applyTheme(cfg.theme);
         updatePatternPreview();
+        LAST_SAVED = cfg;
+        updateSaveEnabled();
         $("status").textContent = "Saved.";
         setTimeout(() => ($("status").textContent = ""), 1500);
     });
@@ -321,16 +363,185 @@ function reflectFiltersEnabledState() {
     setDisabled($("fs-url"), !on);
 }
 
+// ---------- Export / Import ----------
+
+function pickSettingsOnly(obj) {
+    const o = { ...obj };
+    delete o.presets; // do not include presets in a settings backup
+    return o;
+}
+
+function exportSettings() {
+    chrome.storage.sync.get(DEFAULTS, (cfg) => {
+        const data = pickSettingsOnly(cfg);
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const ts = new Date().toISOString().replace(/[:.]/g, '-');
+        a.href = url;
+        a.download = `options-${ts}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        $("status").textContent = "Exported options.json.";
+        setTimeout(() => ($("status").textContent = ""), 1500);
+    });
+}
+
+function importFromFile(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onerror = () => {
+        $("status").textContent = "Import failed (file read error).";
+        setTimeout(() => ($("status").textContent = ""), 2000);
+    };
+    reader.onload = () => {
+        try {
+            const obj = JSON.parse(String(reader.result || '{}'));
+            if (typeof obj !== 'object' || !obj) throw new Error('Invalid JSON');
+            // Shallow validation: must contain at least some known keys
+            const knownKeys = ['scope','filenamePattern','theme','includeImages','includeVideo','includeAudio','includePdf','filtersEnabled','filters'];
+            const ok = knownKeys.some(k => Object.prototype.hasOwnProperty.call(obj, k));
+            if (!ok) throw new Error('Not a settings file');
+            // Do not allow presets to be imported via this path
+            delete obj.presets;
+            chrome.storage.sync.set(obj, () => {
+                load();
+                $("status").textContent = "Imported options.json.";
+                setTimeout(() => ($("status").textContent = ""), 1500);
+            });
+        } catch (e) {
+            $("status").textContent = "Import failed (invalid JSON).";
+            setTimeout(() => ($("status").textContent = ""), 2000);
+        }
+    };
+    reader.readAsText(file);
+}
+
+// ---------- Presets (saved configurations) ----------
+
+function renderPresetsList(presets) {
+    const list = $("presetsList");
+    const empty = $("presetsEmpty");
+    if (!list || !empty) return;
+    list.innerHTML = "";
+    const names = Object.keys(presets || {}).sort((a,b) => a.localeCompare(b));
+    empty.style.display = names.length ? 'none' : '';
+    names.forEach(name => {
+        const li = document.createElement('li');
+        li.style.display = 'flex';
+        li.style.alignItems = 'center';
+        li.style.gap = '8px';
+        li.style.justifyContent = 'space-between';
+        const title = document.createElement('div');
+        title.textContent = name;
+        const actions = document.createElement('div');
+        actions.style.display = 'flex';
+        actions.style.gap = '8px';
+        const applyBtn = document.createElement('button');
+        applyBtn.textContent = 'Apply';
+        applyBtn.dataset.action = 'applyPreset';
+        applyBtn.dataset.name = name;
+        const deleteBtn = document.createElement('button');
+        deleteBtn.textContent = 'Delete';
+        deleteBtn.dataset.action = 'deletePreset';
+        deleteBtn.dataset.name = name;
+        actions.appendChild(applyBtn);
+        actions.appendChild(deleteBtn);
+        li.appendChild(title);
+        li.appendChild(actions);
+        list.appendChild(li);
+    });
+}
+
+function loadPresetsUI() {
+    chrome.storage.sync.get({ presets: {} }, (obj) => {
+        renderPresetsList(obj.presets || {});
+    });
+}
+
+function saveCurrentAsPreset() {
+    const name = (($("presetName")?.value) || "").trim();
+    if (!name) {
+        $("status").textContent = "Enter a preset name.";
+        setTimeout(() => ($("status").textContent = ""), 1200);
+        return;
+    }
+    chrome.storage.sync.get({ presets: {} }, (store) => {
+        chrome.storage.sync.get(DEFAULTS, (cfg) => {
+            const presets = store.presets || {};
+            const payload = pickSettingsOnly(cfg);
+            presets[name] = payload;
+            chrome.storage.sync.set({ presets }, () => {
+                loadPresetsUI();
+                $("status").textContent = "Preset saved.";
+                setTimeout(() => ($("status").textContent = ""), 1200);
+            });
+        });
+    });
+}
+
+function applyPresetByName(name) {
+    if (!name) return;
+    chrome.storage.sync.get({ presets: {} }, (store) => {
+        const preset = (store.presets || {})[name];
+        if (!preset) return;
+        chrome.storage.sync.set(preset, () => {
+            load();
+            $("status").textContent = "Preset applied.";
+            setTimeout(() => ($("status").textContent = ""), 1200);
+        });
+    });
+}
+
+function deletePresetByName(name) {
+    if (!name) return;
+    chrome.storage.sync.get({ presets: {} }, (store) => {
+        const presets = { ...(store.presets || {}) };
+        delete presets[name];
+        chrome.storage.sync.set({ presets }, () => {
+            loadPresetsUI();
+            $("status").textContent = "Preset deleted.";
+            setTimeout(() => ($("status").textContent = ""), 1200);
+        });
+    });
+}
+
 // ---------- Wire up ----------
 
 document.addEventListener("DOMContentLoaded", () => {
     initTabs();
     load();
     updatePatternPreview();
+    loadPresetsUI();
 
     document.addEventListener("click", (e) => {
-        if (e.target.id === "save") save();
-        if (e.target.id === "reset") reset();
+        const t = e.target;
+        if (!(t instanceof HTMLElement)) return;
+        const id = t.id;
+        if (id === "save") save();
+        if (id === "reset") { reset(); }
+        if (id === "exportSettings") exportSettings();
+        if (id === "importSettings") $("importFile").click();
+        if (id === "savePreset") saveCurrentAsPreset();
+        if (t.dataset?.action === 'applyPreset') applyPresetByName(t.dataset.name);
+        if (t.dataset?.action === 'deletePreset') deletePresetByName(t.dataset.name);
+    });
+
+    // Global change tracking: enable Save on any user edit
+    document.addEventListener('input', updateSaveEnabled, true);
+    document.addEventListener('change', (ev) => {
+        if ((ev.target instanceof HTMLInputElement) && ev.target.type === 'file') return;
+        if (ev.target?.id === 'filtersEnabled') reflectFiltersEnabledState();
+        updateSaveEnabled();
+    }, true);
+
+    $("importFile")?.addEventListener('change', (ev) => {
+        const file = ev.target?.files?.[0];
+        importFromFile(file);
+        // reset the input so choosing the same file again triggers change
+        ev.target.value = '';
     });
 
     $("filtersEnabled").addEventListener("change", reflectFiltersEnabledState);

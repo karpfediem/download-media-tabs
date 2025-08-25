@@ -15,19 +15,11 @@
     <div class="title">
         <h1>Download Media Tabs</h1>
         <span class="subtitle">Options</span>
-        <div style="margin-left:auto; display:flex; align-items:center; gap:8px">
     </div>
-</div>
-    <label class="inline" style="margin-left:auto">
-        <span class="note" style="min-width:unset">Theme</span>
-        <select id="theme">
-            <option value="system">System</option>
-            <option value="latte">Latte</option>
-            <option value="frappe">Frappe</option>
-            <option value="macchiato">Macchiato</option>
-            <option value="mocha">Mocha</option>
-        </select>
-    </label>
+    <div style="margin-left:auto; display:flex; align-items:center; gap:8px">
+        <button id="reset" type="button" title="Reset all settings to defaults">Defaults</button>
+        <button id="save" type="button" class="primary" disabled>Save</button>
+    </div>
 </header>
 
 <main class="shell">
@@ -38,6 +30,8 @@
             <button class="tabbtn" role="tab" id="tab-after"       aria-controls="panel-after"       aria-selected="false" tabindex="-1">After download</button>
             <button class="tabbtn" role="tab" id="tab-detection"   aria-controls="panel-detection"   aria-selected="false" tabindex="-1">Detection</button>
             <button class="tabbtn" role="tab" id="tab-performance" aria-controls="panel-performance" aria-selected="false" tabindex="-1">Performance</button>
+            <button class="tabbtn" role="tab" id="tab-theme"       aria-controls="panel-theme"       aria-selected="false" tabindex="-1">Theme</button>
+            <button class="tabbtn" role="tab" id="tab-presets"     aria-controls="panel-presets"     aria-selected="false" tabindex="-1">Saved configurations</button>
             <button class="tabbtn" role="tab" id="tab-about"       aria-controls="panel-about"       aria-selected="false" tabindex="-1">About</button>
         </div>
 
@@ -249,6 +243,46 @@
                 </fieldset>
             </section>
 
+            <!-- Theme -->
+            <section class="panel" id="panel-theme" role="tabpanel" aria-labelledby="tab-theme" hidden>
+                <fieldset>
+                    <legend>Theme</legend>
+                    <label>Choose theme
+                        <select id="theme">
+                            <option value="system">System</option>
+                            <option value="latte">Latte</option>
+                            <option value="frappe">Frappe</option>
+                            <option value="macchiato">Macchiato</option>
+                            <option value="mocha">Mocha</option>
+                        </select>
+                    </label>
+                    <p class="note">Theme controls the color scheme of this options page and popup UI. System uses your OS/browser preference.</p>
+                </fieldset>
+            </section>
+
+            <!-- Saved configurations -->
+            <section class="panel" id="panel-presets" role="tabpanel" aria-labelledby="tab-presets" hidden>
+                <fieldset>
+                    <legend>Presets</legend>
+                    <div class="row">
+                        <label>Preset name
+                            <input id="presetName" type="text" placeholder="My preset" />
+                        </label>
+                        <button id="savePreset" type="button" title="Save current settings as a preset">Save preset</button>
+                    </div>
+                    <div class="row" style="margin-top:8px">
+                        <button id="exportSettings" type="button" title="Export current settings to options.json" style="flex:0 0 auto">Export settings</button>
+                        <input id="importFile" type="file" accept="application/json,.json" style="display:none" />
+                        <button id="importSettings" type="button" title="Import settings from options.json" style="flex:0 0 auto">Import settings</button>
+                    </div>
+                    <div>
+                        <h3 class="h3">Saved presets</h3>
+                        <div id="presetsEmpty" class="note">No presets yet. Create one with “Save preset”.</div>
+                        <ul id="presetsList" style="list-style:none; padding:0; margin:8px 0; display:grid; gap:8px"></ul>
+                    </div>
+                </fieldset>
+            </section>
+
             <!-- About -->
             <section class="panel" id="panel-about" role="tabpanel" aria-labelledby="tab-about" hidden>
                 <fieldset>
@@ -272,8 +306,6 @@
         <!-- Toolbar -->
         <div class="toolbar">
             <span id="status" class="status" aria-live="polite"></span>
-            <button id="reset" type="button">Reset to defaults</button>
-            <button id="save" type="button" class="primary">Save</button>
         </div>
     </div>
 </main>
