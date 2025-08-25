@@ -3,312 +3,248 @@
 <head>
     <meta charset="utf-8" />
     <title>Download Media Tabs – Options</title>
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <style>
-        :root {
-            --bg: #ffffff;
-            --fg: #111;
-            --muted: #666;
-            --border: #ddd;
-            --brand: #0b5fff;
-            --surface: #fafafa;
-            --radius: 12px;
-        }
-        * { box-sizing: border-box; }
-        html, body { height: 100%; }
-        body {
-            margin: 0;
-            padding: 24px;
-            font: 14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-            color: var(--fg);
-            background: var(--bg);
-        }
-        h1 { margin: 0 0 16px; font-size: 20px; }
-        .note { color: var(--muted); font-size: 12px; }
-        .kbd { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: #f6f6f6; padding: 1px 4px; border-radius: 4px; }
-        .tabs {
-            display: grid;
-            grid-template-rows: auto 1fr;
-            gap: 16px;
-        }
-        .tablist {
-            display: flex;
-            gap: 8px;
-            border-bottom: 1px solid var(--border);
-            padding-bottom: 6px;
-        }
-        .tabbtn {
-            appearance: none;
-            border: 1px solid transparent;
-            border-bottom: 2px solid transparent;
-            background: transparent;
-            padding: 8px 12px;
-            border-radius: 8px 8px 0 0;
-            cursor: pointer;
-            color: var(--muted);
-        }
-        .tabbtn[aria-selected="true"] {
-            color: var(--fg);
-            border-color: var(--border);
-            border-bottom-color: var(--bg);
-            background: var(--surface);
-        }
-        .panels {
-            border: 1px solid var(--border);
-            border-radius: 0 12px 12px 12px;
-            background: var(--surface);
-            padding: 16px;
-        }
-        .panel[hidden] { display: none; }
-        fieldset {
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            padding: 16px;
-            margin: 0 0 16px;
-            background: #fff;
-        }
-        legend { font-weight: 600; padding: 0 6px; }
-        label { display: block; margin: 8px 0; }
-        input[type="text"],
-        input[type="number"],
-        textarea,
-        select {
-            width: 100%;
-            padding: 8px 10px;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            background: #fff;
-        }
-        textarea { min-height: 96px; resize: vertical; }
-        .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
-        .row > * { flex: 1 1 240px; }
-        .toolbar {
-            display: flex;
-            gap: 8px;
-            align-items: center;
-            margin-top: 8px;
-        }
-        button {
-            appearance: none;
-            border: 1px solid var(--border);
-            background: #fff;
-            padding: 8px 12px;
-            border-radius: 8px;
-            cursor: pointer;
-        }
-        button.primary {
-            border-color: transparent;
-            background: var(--brand);
-            color: #fff;
-        }
-        .status { margin-left: auto; min-width: 120px; text-align: right; }
-        .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; }
-        @media (max-width: 800px) { .grid2 { grid-template-columns: 1fr; } }
-        .inline { display: inline-flex; gap: 8px; align-items: center; }
-        .disabled { opacity: .55; pointer-events: none; }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="options.css" />
 </head>
 <body>
-<h1>Download Media Tabs — Options</h1>
-
-<div class="tabs" role="application">
-    <!-- Tab headers -->
-    <div class="tablist" role="tablist" aria-label="Settings tabs">
-        <button class="tabbtn" role="tab" id="tab-general" aria-controls="panel-general" aria-selected="true" tabindex="0">General</button>
-        <button class="tabbtn" role="tab" id="tab-detection" aria-controls="panel-detection" aria-selected="false" tabindex="-1">Detection</button>
-        <button class="tabbtn" role="tab" id="tab-performance" aria-controls="panel-performance" aria-selected="false" tabindex="-1">Performance</button>
-        <button class="tabbtn" role="tab" id="tab-filters" aria-controls="panel-filters" aria-selected="false" tabindex="-1">Filters (Beta)</button>
-        <button class="tabbtn" role="tab" id="tab-after" aria-controls="panel-after" aria-selected="false" tabindex="-1">After download</button>
-        <button class="tabbtn" role="tab" id="tab-about" aria-controls="panel-about" aria-selected="false" tabindex="-1">About</button>
+<!-- Header -->
+<header class="appbar">
+    <div class="logo" aria-hidden="true">
+        <img src="icons/icon.svg" alt="Extension logo">
     </div>
+    <div class="title">
+        <h1>Download Media Tabs</h1>
+        <span class="subtitle">Options</span>
+    </div>
+</header>
 
-    <!-- Tab panels -->
-    <div class="panels">
-        <!-- General -->
-        <section class="panel" id="panel-general" role="tabpanel" aria-labelledby="tab-general">
-            <fieldset>
-                <legend>What to download</legend>
-                <label><input type="checkbox" id="includeImages"> Images (image/*)</label>
-                <label><input type="checkbox" id="includeVideo"> Video (video/*)</label>
-                <label><input type="checkbox" id="includeAudio"> Audio (audio/*)</label>
-                <label><input type="checkbox" id="includePdf"> PDF (application/pdf)</label>
-                <p class="note">blob: media and some cross-origin players cannot be saved by extensions; they’re skipped.</p>
-            </fieldset>
+<main class="shell">
+    <div class="tabs" role="application">
+        <!-- Tab headers -->
+        <div class="tablist" role="tablist" aria-label="Settings tabs">
+            <button class="tabbtn" role="tab" id="tab-general"     aria-controls="panel-general"     aria-selected="true"  tabindex="0">General</button>
+            <button class="tabbtn" role="tab" id="tab-after"       aria-controls="panel-after"       aria-selected="false" tabindex="-1">After download</button>
+            <button class="tabbtn" role="tab" id="tab-detection"   aria-controls="panel-detection"   aria-selected="false" tabindex="-1">Detection</button>
+            <button class="tabbtn" role="tab" id="tab-performance" aria-controls="panel-performance" aria-selected="false" tabindex="-1">Performance</button>
+            <button class="tabbtn" role="tab" id="tab-about"       aria-controls="panel-about"       aria-selected="false" tabindex="-1">About</button>
+        </div>
 
-            <fieldset>
-                <legend>Scope & naming</legend>
-                <div class="row">
-                    <label>Default scope
-                        <select id="scope">
-                            <option value="currentWindow">Current window</option>
-                            <option value="allWindows">All windows</option>
-                        </select>
-                    </label>
-                </div>
-                <label>Filename pattern
-                    <input id="filenamePattern" type="text" placeholder="Media Tabs/{YYYYMMDD-HHmmss}/{host}/{basename}" />
-                </label>
-                <p class="note">
-                    Variables: <span class="kbd">{YYYYMMDD-HHmmss}</span>, <span class="kbd">{host}</span>, <span class="kbd">{basename}</span>.
-                    Extension inferred when absent.
-                </p>
-            </fieldset>
-        </section>
-
-        <!-- Detection -->
-        <section class="panel" id="panel-detection" role="tabpanel" aria-labelledby="tab-detection" hidden>
-            <fieldset>
-                <legend>Single-media detection</legend>
-                <label><input type="checkbox" id="strictSingleDetection"> Strict single-media detection (recommended)</label>
-                <div class="row">
-                    <label>Viewport coverage threshold
-                        <input id="coverageThreshold" type="number" min="0" max="1" step="0.05" />
-                    </label>
-                </div>
-                <p class="note">
-                    In strict mode, a page qualifies only if it has exactly one media element, it is a direct child of <span class="kbd">&lt;body&gt;</span>,
-                    and it covers the given fraction of the viewport.
-                </p>
-            </fieldset>
-        </section>
-
-        <!-- Performance -->
-        <section class="panel" id="panel-performance" role="tabpanel" aria-labelledby="tab-performance" hidden>
-            <fieldset>
-                <legend>Parallelism</legend>
-                <div class="grid2">
-                    <label>Probe concurrency (tabs)
-                        <input id="probeConcurrency" type="number" min="1" max="32" step="1" />
-                    </label>
-                    <label>Download concurrency
-                        <input id="downloadConcurrency" type="number" min="1" max="32" step="1" />
-                    </label>
-                </div>
-                <p class="note">Higher values finish faster but can increase CPU/network load.</p>
-            </fieldset>
-        </section>
-
-        <!-- Filters (future-ready) -->
-        <section class="panel" id="panel-filters" role="tabpanel" aria-labelledby="tab-filters" hidden>
-            <fieldset>
-                <legend>Filters (planned)</legend>
-                <label class="inline">
-                    <input type="checkbox" id="filtersEnabled" />
-                    Enable filters (size, domain, extension, MIME, URL)
-                </label>
-                <p class="note">These settings are saved now and can be enforced later in the extension logic.</p>
-            </fieldset>
-
-            <fieldset id="fs-size">
-                <legend>File size</legend>
-                <div class="grid2">
-                    <div class="inline">
-                        <label style="flex:1">Minimum size
-                            <input id="minSizeValue" type="number" min="0" step="1" />
-                        </label>
-                        <label style="width:120px">Unit
-                            <select id="minSizeUnit">
-                                <option value="B">B</option>
-                                <option value="KB">KB</option>
-                                <option value="MB">MB</option>
-                                <option value="GB">GB</option>
+        <!-- Panels -->
+        <div class="panels">
+            <!-- General -->
+            <section class="panel" id="panel-general" role="tabpanel" aria-labelledby="tab-general">
+                <fieldset>
+                    <legend>Scope &amp; naming</legend>
+                    <div class="row">
+                        <label>Default scope
+                            <select id="scope">
+                                <option value="currentWindow">Current window</option>
+                                <option value="allWindows">All windows</option>
                             </select>
                         </label>
                     </div>
-                    <div class="inline">
-                        <label style="flex:1">Maximum size
-                            <input id="maxSizeValue" type="number" min="0" step="1" />
-                        </label>
-                        <label style="width:120px">Unit
-                            <select id="maxSizeUnit">
-                                <option value="B">B</option>
-                                <option value="KB">KB</option>
-                                <option value="MB" selected>MB</option>
-                                <option value="GB">GB</option>
-                            </select>
+                    <label>Filename pattern
+                        <input id="filenamePattern" type="text" placeholder="Media Tabs/{YYYYMMDD-HHmmss}/{host}/{basename}">
+                    </label>
+                    <p class="note">
+                        Variables: <span class="kbd">{YYYYMMDD-HHmmss}</span>, <span class="kbd">{host}</span>, <span class="kbd">{basename}</span>.
+                        Extension inferred when absent.
+                    </p>
+                </fieldset>
+
+                <fieldset>
+                    <legend>Filters</legend>
+
+                    <label class="inline">
+                        <input type="checkbox" id="filtersEnabled">
+                        Enable advanced filters (size, dimensions, domain, extension, MIME, URL)
+                    </label>
+                    <p class="note">
+                        Media type selection below is always applied. Advanced filters can be turned on/off with the switch.
+                    </p>
+
+                    <section id="fs-media">
+                        <h3 class="h3">Media types</h3>
+                        <label><input type="checkbox" id="includeImages"> Images (image/*)</label>
+                        <label><input type="checkbox" id="includeVideo"> Video (video/*)</label>
+                        <label><input type="checkbox" id="includeAudio"> Audio (audio/*)</label>
+                        <label><input type="checkbox" id="includePdf"> PDF (application/pdf)</label>
+                    </section>
+
+                    <section id="fs-size-dimensions">
+                        <h3 class="h3">Image dimensions</h3>
+                        <div class="grid2">
+                            <label>Minimum width (px)
+                                <input id="minWidth" type="number" min="0" step="1" />
+                            </label>
+                            <label>Minimum height (px)
+                                <input id="minHeight" type="number" min="0" step="1" />
+                            </label>
+                        </div>
+                        <div class="grid2">
+                            <label>Maximum width (px)
+                                <input id="maxWidth" type="number" min="0" step="1" />
+                            </label>
+                            <label>Maximum height (px)
+                                <input id="maxHeight" type="number" min="0" step="1" />
+                            </label>
+                        </div>
+                        <div class="grid2">
+                            <label>Minimum megapixels (MP)
+                                <input id="minMegapixels" type="number" min="0" step="0.1" />
+                            </label>
+                            <label>Maximum megapixels (MP)
+                                <input id="maxMegapixels" type="number" min="0" step="0.1" />
+                            </label>
+                        </div>
+                        <p class="note">Use 0 for “no limit”. Dimensions apply to images; other media types are unaffected.</p>
+                    </section>
+
+                    <section id="fs-size-bytes">
+                        <h3 class="h3">File size (bytes)</h3>
+                        <div class="grid2">
+                            <div class="row">
+                                <label>Minimum size
+                                    <input id="minSizeValue" type="number" min="0" step="1" />
+                                </label>
+                                <label style="max-width:140px">Unit
+                                    <select id="minSizeUnit">
+                                        <option value="B">B</option>
+                                        <option value="KB">KB</option>
+                                        <option value="MB">MB</option>
+                                        <option value="GB">GB</option>
+                                    </select>
+                                </label>
+                            </div>
+                            <div class="row">
+                                <label>Maximum size
+                                    <input id="maxSizeValue" type="number" min="0" step="1" />
+                                </label>
+                                <label style="max-width:140px">Unit
+                                    <select id="maxSizeUnit">
+                                        <option value="B">B</option>
+                                        <option value="KB">KB</option>
+                                        <option value="MB" selected>MB</option>
+                                        <option value="GB">GB</option>
+                                    </select>
+                                </label>
+                            </div>
+                        </div>
+                        <p class="note">Values are stored in bytes. Use 0 for “no limit”.</p>
+                    </section>
+
+                    <section id="fs-domain">
+                        <h3 class="h3">Domain allow/deny</h3>
+                        <div class="grid2">
+                            <label>Allowed domains (one per line)
+                                <textarea id="allowedDomains" placeholder="example.com&#10;images.example.org"></textarea>
+                            </label>
+                            <label>Blocked domains (one per line)
+                                <textarea id="blockedDomains" placeholder="ads.example.com&#10;tracking.example.net"></textarea>
+                            </label>
+                        </div>
+                        <p class="note">Suffix match (e.g., “example.com” also matches “sub.example.com”).</p>
+                    </section>
+
+                    <section id="fs-ext-mime">
+                        <h3 class="h3">Extension &amp; MIME</h3>
+                        <div class="grid2">
+                            <label>Allowed extensions (one per line)
+                                <textarea id="allowedExtensions" placeholder="jpg&#10;png&#10;mp4"></textarea>
+                            </label>
+                            <label>Blocked extensions (one per line)
+                                <textarea id="blockedExtensions" placeholder="gif&#10;svg"></textarea>
+                            </label>
+                        </div>
+                        <div class="grid2">
+                            <label>Allowed MIME patterns (one per line)
+                                <textarea id="allowedMime" placeholder="image/*&#10;video/mp4"></textarea>
+                            </label>
+                            <label>Blocked MIME patterns (one per line)
+                                <textarea id="blockedMime" placeholder="image/svg+xml"></textarea>
+                            </label>
+                        </div>
+                        <p class="note">MIME supports wildcards like <span class="kbd">image/*</span>.</p>
+                    </section>
+
+                    <section id="fs-url">
+                        <h3 class="h3">URL substring filters</h3>
+                        <div class="grid2">
+                            <label>Include if URL contains (one per line)
+                                <textarea id="includeUrlSubstrings" placeholder="/photos/&#10;?download=true"></textarea>
+                            </label>
+                            <label>Exclude if URL contains (one per line)
+                                <textarea id="excludeUrlSubstrings" placeholder="/banner/&#10;/thumbs/"></textarea>
+                            </label>
+                        </div>
+                    </section>
+                </fieldset>
+            </section>
+
+            <!-- After download -->
+            <section class="panel" id="panel-after" role="tabpanel" aria-labelledby="tab-after" hidden>
+                <fieldset>
+                    <legend>Post actions</legend>
+                    <label><input type="checkbox" id="closeTabAfterDownload"> Close the tab after its file is downloaded</label>
+                    <label><input type="checkbox" id="keepWindowOpenOnLastTabClose"> Keep window open if this would close its last tab</label>
+                    <p class="note">
+                        For silent bulk downloads, disable <em>Ask where to save each file before downloading</em> at
+                        <span class="kbd">chrome://settings/downloads</span>.
+                    </p>
+                </fieldset>
+            </section>
+
+            <!-- Detection -->
+            <section class="panel" id="panel-detection" role="tabpanel" aria-labelledby="tab-detection" hidden>
+                <fieldset>
+                    <legend>Single-media detection</legend>
+                    <label><input type="checkbox" id="strictSingleDetection"> Strict single-media detection (recommended)</label>
+                    <div class="row">
+                        <label>Viewport coverage threshold
+                            <input id="coverageThreshold" type="number" min="0" max="1" step="0.05" />
                         </label>
                     </div>
-                </div>
-                <p class="note">Use 0 for “no limit”. Units convert to bytes on save.</p>
-            </fieldset>
+                    <p class="note">
+                        In strict mode, a page qualifies only if it has exactly one media element, it is a direct child of <span class="kbd">&lt;body&gt;</span>,
+                        and it covers the given fraction of the viewport.
+                    </p>
+                </fieldset>
+            </section>
 
-            <fieldset id="fs-domain">
-                <legend>Domain allow/deny</legend>
-                <div class="grid2">
-                    <label>Allowed domains (one per line)
-                        <textarea id="allowedDomains" placeholder="example.com&#10;images.example.org"></textarea>
-                    </label>
-                    <label>Blocked domains (one per line)
-                        <textarea id="blockedDomains" placeholder="ads.example.com&#10;tracking.example.net"></textarea>
-                    </label>
-                </div>
-                <p class="note">Domains are matched by suffix (e.g., “example.com” also matches “sub.example.com”).</p>
-            </fieldset>
+            <!-- Performance -->
+            <section class="panel" id="panel-performance" role="tabpanel" aria-labelledby="tab-performance" hidden>
+                <fieldset>
+                    <legend>Parallelism</legend>
+                    <div class="grid2">
+                        <label>Probe concurrency (tabs)
+                            <input id="probeConcurrency" type="number" min="1" max="32" step="1" />
+                        </label>
+                        <label>Download concurrency
+                            <input id="downloadConcurrency" type="number" min="1" max="32" step="1" />
+                        </label>
+                    </div>
+                    <p class="note">Higher values finish faster but can increase CPU/network load.</p>
+                </fieldset>
+            </section>
 
-            <fieldset id="fs-ext-mime">
-                <legend>Extension &amp; MIME</legend>
-                <div class="grid2">
-                    <label>Allowed extensions (one per line)
-                        <textarea id="allowedExtensions" placeholder="jpg&#10;png&#10;mp4"></textarea>
-                    </label>
-                    <label>Blocked extensions (one per line)
-                        <textarea id="blockedExtensions" placeholder="gif&#10;svg"></textarea>
-                    </label>
-                </div>
-                <div class="grid2">
-                    <label>Allowed MIME patterns (one per line)
-                        <textarea id="allowedMime" placeholder="image/*&#10;video/mp4"></textarea>
-                    </label>
-                    <label>Blocked MIME patterns (one per line)
-                        <textarea id="blockedMime" placeholder="image/svg+xml"></textarea>
-                    </label>
-                </div>
-                <p class="note">MIME supports wildcards like <span class="kbd">image/*</span>.</p>
-            </fieldset>
+            <!-- About -->
+            <section class="panel" id="panel-about" role="tabpanel" aria-labelledby="tab-about" hidden>
+                <fieldset>
+                    <legend>About</legend>
+                    <p>This UI groups common preferences in <strong>General</strong> and keeps advanced settings in dedicated tabs. Styling uses the Catppuccin Mocha palette with solid colors only.</p>
+                    <p class="note">Tip: Right-click the toolbar icon for “current window” / “all windows”.</p>
+                </fieldset>
+            </section>
+        </div>
 
-            <fieldset id="fs-url">
-                <legend>URL substring filters</legend>
-                <div class="grid2">
-                    <label>Include if URL contains (one per line)
-                        <textarea id="includeUrlSubstrings" placeholder="/photos/&#10;?download=true"></textarea>
-                    </label>
-                    <label>Exclude if URL contains (one per line)
-                        <textarea id="excludeUrlSubstrings" placeholder="/banner/&#10;/thumbs/"></textarea>
-                    </label>
-                </div>
-            </fieldset>
-        </section>
-
-        <!-- After download -->
-        <section class="panel" id="panel-after" role="tabpanel" aria-labelledby="tab-after" hidden>
-            <fieldset>
-                <legend>Post actions</legend>
-                <label><input type="checkbox" id="closeTabAfterDownload"> Close the tab after its file is downloaded</label>
-                <label><input type="checkbox" id="keepWindowOpenOnLastTabClose"> Keep window open if this would close its last tab</label>
-                <p class="note">
-                    For silent bulk downloads, disable <em>Ask where to save each file before downloading</em> at
-                    <span class="kbd">chrome://settings/downloads</span>.
-                </p>
-            </fieldset>
-        </section>
-
-        <!-- About -->
-        <section class="panel" id="panel-about" role="tabpanel" aria-labelledby="tab-about" hidden>
-            <fieldset>
-                <legend>About</legend>
-                <p>Version is managed in <span class="kbd">manifest.json</span>. This options UI groups frequently used items under <strong>General</strong> and keeps advanced and future features in dedicated tabs.</p>
-                <p class="note">Tip: Right-click the toolbar icon for “current window” / “all windows”.</p>
-            </fieldset>
-        </section>
+        <!-- Toolbar -->
+        <div class="toolbar">
+            <span id="status" class="status" aria-live="polite"></span>
+            <button id="reset" type="button">Reset to defaults</button>
+            <button id="save" type="button" class="primary">Save</button>
+        </div>
     </div>
-
-    <!-- Toolbar -->
-    <div class="toolbar">
-        <button id="save" class="primary">Save</button>
-        <button id="reset">Reset to defaults</button>
-        <span id="status" class="status note" aria-live="polite"></span>
-    </div>
-</div>
+</main>
 
 <script src="options.js"></script>
 </body>

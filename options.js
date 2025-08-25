@@ -1,4 +1,4 @@
-// Options UI logic with tabbed navigation and future-ready Filters.
+// Options UI logic with tabbed navigation and unified Filters.
 // Saves everything to chrome.storage.sync using a DEFAULTS object.
 
 const DEFAULTS = {
@@ -22,21 +22,33 @@ const DEFAULTS = {
     closeTabAfterDownload: false,
     keepWindowOpenOnLastTabClose: false,
 
-    // Filters (not enforced yet)
-    filtersEnabled: false,
+    // Filters
+    filtersEnabled: false,  // Advanced filters toggle (media type is always applied)
     filters: {
-        // Sizes in BYTES (0 means “no limit”)
+        // Dimensions (images only). 0 means “no limit”.
+        minWidth: 0,
+        minHeight: 0,
+        maxWidth: 0,
+        maxHeight: 0,
+        minMegapixels: 0,  // e.g., 2.0 for 2MP
+        maxMegapixels: 0,
+
+        // File size in bytes. 0 means “no limit”.
         minBytes: 0,
         maxBytes: 0,
-        // Domain lists (strings, normalized without leading dots)
+
+        // Domain lists
         allowedDomains: [],
         blockedDomains: [],
+
         // Extensions (lowercase, no dots)
         allowedExtensions: [],
         blockedExtensions: [],
-        // MIME patterns (e.g., "image/*", "video/mp4")
+
+        // MIME patterns (lowercase; supports wildcards like image/*)
         allowedMime: [],
         blockedMime: [],
+
         // URL substring includes/excludes
         includeUrlSubstrings: [],
         excludeUrlSubstrings: []
@@ -98,7 +110,7 @@ function setDisabled(el, disabled) {
 
 // ---------- Tabs (accessible) ----------
 
-const tabIds = ["general","detection","performance","filters","after","about"];
+const tabIds = ["general", "after", "detection", "performance", "about"];
 function initTabs() {
     const tabs = tabIds.map(id => ({
         tab: $(`tab-${id}`),
@@ -109,9 +121,10 @@ function initTabs() {
             const selected = i === idx;
             t.tab.setAttribute("aria-selected", String(selected));
             t.tab.tabIndex = selected ? 0 : -1;
-            if (selected) t.tab.focus();
             if (selected) t.panel.removeAttribute("hidden"); else t.panel.setAttribute("hidden", "");
         });
+        // Keep focus on the active tab for a11y
+        tabs[idx]?.tab?.focus?.();
         localStorage.setItem("dmt-active-tab", String(idx));
     }
     tabs.forEach((t, i) => {
@@ -120,7 +133,7 @@ function initTabs() {
             if (ev.key === "ArrowRight" || ev.key === "ArrowLeft") {
                 ev.preventDefault();
                 const dir = ev.key === "ArrowRight" ? 1 : -1;
-                let next = (i + dir + tabs.length) % tabs.length;
+                const next = (i + dir + tabs.length) % tabs.length;
                 activate(next);
             }
         });
@@ -134,12 +147,14 @@ function initTabs() {
 function load() {
     chrome.storage.sync.get(DEFAULTS, (cfg) => {
         // General
+        $("scope").value           = cfg.scope || DEFAULTS.scope;
+        $("filenamePattern").value = cfg.filenamePattern || DEFAULTS.filenamePattern;
+
+        // Media types (always applied)
         $("includeImages").checked = !!cfg.includeImages;
         $("includeVideo").checked  = !!cfg.includeVideo;
         $("includeAudio").checked  = !!cfg.includeAudio;
         $("includePdf").checked    = !!cfg.includePdf;
-        $("scope").value           = cfg.scope || DEFAULTS.scope;
-        $("filenamePattern").value = cfg.filenamePattern || DEFAULTS.filenamePattern;
 
         // Detection
         $("strictSingleDetection").checked = cfg.strictSingleDetection !== false;
@@ -157,22 +172,31 @@ function load() {
         const filters = Object.assign({}, DEFAULTS.filters, cfg.filters);
         $("filtersEnabled").checked = !!cfg.filtersEnabled;
 
+        // Dimensions
+        $("minWidth").value      = String(filters.minWidth || 0);
+        $("minHeight").value     = String(filters.minHeight || 0);
+        $("maxWidth").value      = String(filters.maxWidth || 0);
+        $("maxHeight").value     = String(filters.maxHeight || 0);
+        $("minMegapixels").value = String(filters.minMegapixels || 0);
+        $("maxMegapixels").value = String(filters.maxMegapixels || 0);
+
+        // File size
         const min = valueUnitFromBytes(filters.minBytes);
         $("minSizeValue").value = String(min.value);
-        $("minSizeUnit").value = min.unit;
-
+        $("minSizeUnit").value  = min.unit;
         const max = valueUnitFromBytes(filters.maxBytes);
         $("maxSizeValue").value = String(max.value);
-        $("maxSizeUnit").value = max.unit;
+        $("maxSizeUnit").value  = max.unit;
 
-        $("allowedDomains").value      = (filters.allowedDomains || []).join("\n");
-        $("blockedDomains").value      = (filters.blockedDomains || []).join("\n");
-        $("allowedExtensions").value   = (filters.allowedExtensions || []).join("\n");
-        $("blockedExtensions").value   = (filters.blockedExtensions || []).join("\n");
-        $("allowedMime").value         = (filters.allowedMime || []).join("\n");
-        $("blockedMime").value         = (filters.blockedMime || []).join("\n");
-        $("includeUrlSubstrings").value= (filters.includeUrlSubstrings || []).join("\n");
-        $("excludeUrlSubstrings").value= (filters.excludeUrlSubstrings || []).join("\n");
+        // Lists
+        $("allowedDomains").value       = (filters.allowedDomains || []).join("\n");
+        $("blockedDomains").value       = (filters.blockedDomains || []).join("\n");
+        $("allowedExtensions").value    = (filters.allowedExtensions || []).join("\n");
+        $("blockedExtensions").value    = (filters.blockedExtensions || []).join("\n");
+        $("allowedMime").value          = (filters.allowedMime || []).join("\n");
+        $("blockedMime").value          = (filters.blockedMime || []).join("\n");
+        $("includeUrlSubstrings").value = (filters.includeUrlSubstrings || []).join("\n");
+        $("excludeUrlSubstrings").value = (filters.excludeUrlSubstrings || []).join("\n");
 
         reflectFiltersEnabledState();
     });
@@ -186,12 +210,14 @@ function save() {
 
     const cfg = {
         // General
+        scope: $("scope").value,
+        filenamePattern: $("filenamePattern").value.trim() || DEFAULTS.filenamePattern,
+
+        // Media types (always applied)
         includeImages: $("includeImages").checked,
         includeVideo:  $("includeVideo").checked,
         includeAudio:  $("includeAudio").checked,
         includePdf:    $("includePdf").checked,
-        scope: $("scope").value,
-        filenamePattern: $("filenamePattern").value.trim() || DEFAULTS.filenamePattern,
 
         // Detection
         strictSingleDetection: $("strictSingleDetection").checked,
@@ -208,8 +234,19 @@ function save() {
         // Filters
         filtersEnabled,
         filters: {
+            // Dimensions
+            minWidth:      clampInt($("minWidth").value, 0, 100000, 0),
+            minHeight:     clampInt($("minHeight").value, 0, 100000, 0),
+            maxWidth:      clampInt($("maxWidth").value, 0, 100000, 0),
+            maxHeight:     clampInt($("maxHeight").value, 0, 100000, 0),
+            minMegapixels: clampFloat($("minMegapixels").value, 0, 10000, 0),
+            maxMegapixels: clampFloat($("maxMegapixels").value, 0, 10000, 0),
+
+            // Size (bytes)
             minBytes,
             maxBytes,
+
+            // Lists
             allowedDomains: normalizeDomainList(linesToArray($("allowedDomains").value)),
             blockedDomains: normalizeDomainList(linesToArray($("blockedDomains").value)),
             allowedExtensions: normalizeExtList(linesToArray($("allowedExtensions").value)),
@@ -231,10 +268,11 @@ function reset() {
     chrome.storage.sync.set(DEFAULTS, load);
 }
 
-// Enable/disable fieldsets based on master switch
+// Enable/disable advanced fieldsets (media types remain active always)
 function reflectFiltersEnabledState() {
     const on = $("filtersEnabled").checked;
-    setDisabled($("fs-size"), !on);
+    setDisabled($("fs-size-dimensions"), !on);
+    setDisabled($("fs-size-bytes"), !on);
     setDisabled($("fs-domain"), !on);
     setDisabled($("fs-ext-mime"), !on);
     setDisabled($("fs-url"), !on);
