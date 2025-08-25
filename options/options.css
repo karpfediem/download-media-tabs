@@ -257,7 +257,7 @@ select:disabled{
 }
 
 /* Presets tab tweaks */
-#savePreset{ flex:0 0 auto; padding:8px 12px; align-self:center; }
+#savePreset{ flex:0 0 auto; align-self:flex-end; margin-bottom:8px; }
 
 /* Disabled groups */
 .disabled{ opacity:.6; pointer-events:none; }

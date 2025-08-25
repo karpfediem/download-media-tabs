@@ -31,7 +31,7 @@
             <button class="tabbtn" role="tab" id="tab-detection"   aria-controls="panel-detection"   aria-selected="false" tabindex="-1">Detection</button>
             <button class="tabbtn" role="tab" id="tab-performance" aria-controls="panel-performance" aria-selected="false" tabindex="-1">Performance</button>
             <button class="tabbtn" role="tab" id="tab-theme"       aria-controls="panel-theme"       aria-selected="false" tabindex="-1">Theme</button>
-            <button class="tabbtn" role="tab" id="tab-presets"     aria-controls="panel-presets"     aria-selected="false" tabindex="-1">Saved configurations</button>
+            <button class="tabbtn" role="tab" id="tab-presets"     aria-controls="panel-presets"     aria-selected="false" tabindex="-1">Presets</button>
             <button class="tabbtn" role="tab" id="tab-about"       aria-controls="panel-about"       aria-selected="false" tabindex="-1">About</button>
         </div>
 
@@ -266,15 +266,15 @@
                 <fieldset>
                     <legend>Presets</legend>
                     <div class="row">
-                        <label>Preset name
+                        <label><span class="label-text">Preset name</span>
                             <input id="presetName" type="text" placeholder="My preset" />
                         </label>
-                        <button id="savePreset" type="button" title="Save current settings as a preset">Save preset</button>
+                        <button id="savePreset" type="button" title="Save current options as a preset">Save</button>
                     </div>
                     <div class="row" style="margin-top:8px">
-                        <button id="exportSettings" type="button" title="Export current settings to options.json" style="flex:0 0 auto">Export settings</button>
+                        <button id="exportSettings" type="button" title="Export current options to options.json" style="flex:0 0 auto">Export options</button>
                         <input id="importFile" type="file" accept="application/json,.json" style="display:none" />
-                        <button id="importSettings" type="button" title="Import settings from options.json" style="flex:0 0 auto">Import settings</button>
+                        <button id="importSettings" type="button" title="Import options from options.json" style="flex:0 0 auto">Import options</button>
                     </div>
                     <div>
                         <h3 class="h3">Saved presets</h3>
