@@ -15,7 +15,19 @@
     <div class="title">
         <h1>Download Media Tabs</h1>
         <span class="subtitle">Options</span>
+        <div style="margin-left:auto; display:flex; align-items:center; gap:8px">
     </div>
+</div>
+    <label class="inline" style="margin-left:auto">
+        <span class="note" style="min-width:unset">Theme</span>
+        <select id="theme">
+            <option value="system">System</option>
+            <option value="latte">Latte</option>
+            <option value="frappe">Frappe</option>
+            <option value="macchiato">Macchiato</option>
+            <option value="mocha">Mocha</option>
+        </select>
+    </label>
 </header>
 
 <main class="shell">
@@ -46,6 +58,7 @@
                     <label>Filename pattern
                         <input id="filenamePattern" type="text" placeholder="Media Tabs/{YYYYMMDD-HHmmss}/{host}/{basename}">
                     </label>
+                    <p id="patternPreview" class="note"></p>
                     <p class="note">
                         Variables: <span class="kbd">{YYYYMMDD-HHmmss}</span>, <span class="kbd">{host}</span>, <span class="kbd">{basename}</span>.
                         Extension inferred when absent.

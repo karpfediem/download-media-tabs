@@ -9,6 +9,7 @@ const DEFAULTS = {
     includePdf: true,
     scope: "currentWindow",
     filenamePattern: "Media Tabs/{YYYYMMDD-HHmmss}/{host}/{basename}",
+    theme: "system",
 
     // Detection
     strictSingleDetection: true,
@@ -142,6 +143,41 @@ function initTabs() {
     activate(saved);
 }
 
+// ---------- Theme & Preview ----------
+
+function computePatternPreview(pattern) {
+    const now = new Date();
+    const pad2 = (n) => String(n).padStart(2, "0");
+    const yyyy = now.getFullYear();
+    const MM = pad2(now.getMonth() + 1);
+    const dd = pad2(now.getDate());
+    const HH = pad2(now.getHours());
+    const mm = pad2(now.getMinutes());
+    const ss = pad2(now.getSeconds());
+    const stamp = `${yyyy}${MM}${dd}-${HH}${mm}${ss}`;
+    const host = "example.com";
+    const basename = "image";
+    let s = String(pattern || "");
+    s = s.replaceAll("{YYYYMMDD-HHmmss}", stamp)
+         .replaceAll("{host}", host)
+         .replaceAll("{basename}", basename);
+    return s;
+}
+
+function updatePatternPreview() {
+    const el = $("patternPreview");
+    if (!el) return;
+    const pattern = $("filenamePattern").value || DEFAULTS.filenamePattern;
+    el.textContent = "Preview: " + computePatternPreview(pattern);
+}
+
+function applyTheme(theme) {
+    const root = document.documentElement;
+    const preferred = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'latte' : 'mocha';
+    const finalTheme = (theme === 'system') ? preferred : theme;
+    root.setAttribute('data-theme', finalTheme);
+}
+
 // ---------- Load / Save ----------
 
 function load() {
@@ -149,6 +185,10 @@ function load() {
         // General
         $("scope").value           = cfg.scope || DEFAULTS.scope;
         $("filenamePattern").value = cfg.filenamePattern || DEFAULTS.filenamePattern;
+        // Theme
+        const theme = cfg.theme || DEFAULTS.theme;
+        $("theme").value = theme;
+        applyTheme(theme);
 
         // Media types (always applied)
         $("includeImages").checked = !!cfg.includeImages;
@@ -212,6 +252,7 @@ function save() {
         // General
         scope: $("scope").value,
         filenamePattern: $("filenamePattern").value.trim() || DEFAULTS.filenamePattern,
+        theme: $("theme").value || DEFAULTS.theme,
 
         // Media types (always applied)
         includeImages: $("includeImages").checked,
@@ -259,6 +300,8 @@ function save() {
     };
 
     chrome.storage.sync.set(cfg, () => {
+        if (cfg.theme) applyTheme(cfg.theme);
+        updatePatternPreview();
         $("status").textContent = "Saved.";
         setTimeout(() => ($("status").textContent = ""), 1500);
     });
@@ -283,6 +326,7 @@ function reflectFiltersEnabledState() {
 document.addEventListener("DOMContentLoaded", () => {
     initTabs();
     load();
+    updatePatternPreview();
 
     document.addEventListener("click", (e) => {
         if (e.target.id === "save") save();
@@ -290,4 +334,21 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     $("filtersEnabled").addEventListener("change", reflectFiltersEnabledState);
+
+    // Live preview for filename pattern
+    $("filenamePattern").addEventListener("input", updatePatternPreview);
+
+    // Theme switching
+    $("theme").addEventListener("change", () => {
+        applyTheme($("theme").value);
+    });
+
+    // React to system theme changes if in system mode
+    const media = window.matchMedia('(prefers-color-scheme: light)');
+    if (media?.addEventListener) {
+        media.addEventListener('change', () => {
+            const t = $("theme").value || DEFAULTS.theme;
+            if (t === 'system') applyTheme('system');
+        });
+    }
 });
