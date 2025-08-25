@@ -623,7 +623,8 @@ function showToast(message, type = 'info', duration = 1600) {
                 el.remove();
             }, { once:true });
         };
-        const ms = Math.max(600, Math.min(10000, Number(duration) || 1600));
+        // Allow longer toasts (up to 30s) for first-run welcome
+        const ms = Math.max(600, Math.min(30000, Number(duration) || 1600));
         setTimeout(hide, ms);
         return el;
     }catch(e){
@@ -638,6 +639,21 @@ document.addEventListener("DOMContentLoaded", () => {
     load();
     updatePatternPreview();
     loadPresetsUI();
+
+    // Show a welcome note on first install (triggered by background via storage.local)
+    try {
+        chrome.storage?.local?.get({ shouldShowWelcome: false }, (obj) => {
+            if (obj && obj.shouldShowWelcome) {
+                // Clear the flag so it only shows once
+                chrome.storage?.local?.set({ shouldShowWelcome: false });
+                showToast(
+                    "Welcome! Take a moment to review Options. You can reopen them anytime by right-clicking the extension icon and choosing Options.",
+                    'info',
+                    15000
+                );
+            }
+        });
+    } catch {}
 
     document.addEventListener("click", (e) => {
         const t = e.target;
