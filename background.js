@@ -1,4 +1,4 @@
-// Download Media Tabs — background service worker (MV3) with parallelism
+// Download Media Tabs — background service worker (MV3) with parallelism + strict single-media detection
 
 const DEFAULT_SETTINGS = {
   includeImages: true,
@@ -8,24 +8,22 @@ const DEFAULT_SETTINGS = {
   scope: "currentWindow", // "currentWindow" | "allWindows"
   filenamePattern: "Media Tabs/{YYYYMMDD-HHmmss}/{host}/{basename}",
   closeTabAfterDownload: false,
-  probeConcurrency: 8,     // NEW: parallel probes of tabs
-  downloadConcurrency: 6   // NEW: parallel downloads
+  probeConcurrency: 8,
+  downloadConcurrency: 6,
+  strictSingleDetection: true,
+  coverageThreshold: 0.5
 };
 
 const MEDIA_EXTENSIONS = new Map([
-  // images
   ["jpg", "image/jpeg"], ["jpeg", "image/jpeg"], ["jpe", "image/jpeg"],
   ["png", "image/png"], ["gif", "image/gif"], ["webp", "image/webp"],
   ["bmp", "image/bmp"], ["tif", "image/tiff"], ["tiff", "image/tiff"],
   ["svg", "image/svg+xml"], ["avif", "image/avif"],
-  // video
   ["mp4", "video/mp4"], ["m4v", "video/x-m4v"], ["mov", "video/quicktime"],
   ["webm", "video/webm"], ["mkv", "video/x-matroska"], ["avi", "video/x-msvideo"],
   ["ogv", "video/ogg"],
-  // audio
   ["mp3", "audio/mpeg"], ["m4a", "audio/mp4"], ["aac", "audio/aac"],
   ["flac", "audio/flac"], ["wav", "audio/wav"], ["ogg", "audio/ogg"], ["oga", "audio/ogg"],
-  // documents
   ["pdf", "application/pdf"]
 ]);
 
@@ -144,7 +142,6 @@ chrome.action.onClicked.addListener(async () => {
 // Track downloads we initiated to close corresponding tabs
 const downloadIdToTabId = new Map();
 
-// Close only when the specific download completes successfully
 chrome.downloads.onChanged.addListener(async (delta) => {
   if (!delta || typeof delta.id !== "number") return;
   const tabId = downloadIdToTabId.get(delta.id);
@@ -166,7 +163,7 @@ chrome.downloads.onChanged.addListener(async (delta) => {
   }
 });
 
-// -------- Parallelization helpers --------
+// ---------- Parallelization ----------
 
 function pLimit(concurrency) {
   let active = 0;
@@ -188,13 +185,10 @@ function pLimit(concurrency) {
   });
 }
 
-// -------- Main flow (now parallel) --------
-
 async function runDownload(scope) {
   const settings = await getSettings();
   const allTabs = await chrome.tabs.query(scope === "allWindows" ? {} : { currentWindow: true });
 
-  // Filter out unsupported schemes
   const candidateTabs = allTabs.filter(t => {
     try {
       const u = new URL(t.url || "");
@@ -208,15 +202,12 @@ async function runDownload(scope) {
   }
 
   const stampDate = new Date();
-
-  // 1) Decide in parallel with a concurrency cap
   const limitProbe = pLimit(Math.max(1, settings.probeConcurrency | 0));
   const decisions = await Promise.allSettled(
       candidateTabs.map(tab => limitProbe(() => decideTab(tab, settings)))
   );
 
-  // 2) Build download tasks; also dedupe by final download URL
-  const seenUrl = new Map(); // url -> tabId that "owns" it (first wins, used for closing)
+  const seenUrl = new Map();
   const tasks = [];
   for (let i = 0; i < decisions.length; i++) {
     const res = decisions[i];
@@ -226,10 +217,7 @@ async function runDownload(scope) {
     const { downloadUrl, suggestedExt, baseName } = res.value;
 
     if (!downloadUrl) continue;
-    if (seenUrl.has(downloadUrl)) {
-      // Another tab already schedules this same URL; skip this duplicate to avoid double download.
-      continue;
-    }
+    if (seenUrl.has(downloadUrl)) continue;
     seenUrl.set(downloadUrl, tab.id);
 
     const host = hostFromUrl(downloadUrl);
@@ -249,9 +237,7 @@ async function runDownload(scope) {
     return;
   }
 
-  // 3) Start downloads in parallel (rate-limited)
   const limitDl = pLimit(Math.max(1, settings.downloadConcurrency | 0));
-  const started = [];
   const results = await Promise.allSettled(tasks.map(t => limitDl(async () => {
     const downloadId = await chrome.downloads.download({
       url: t.url,
@@ -261,20 +247,20 @@ async function runDownload(scope) {
     });
     if (typeof downloadId === "number") {
       downloadIdToTabId.set(downloadId, t.tabId);
-      started.push({ downloadId, tabId: t.tabId, url: t.url, filename: t.filename });
     }
   })));
 
   const ok = results.filter(r => r.status === "fulfilled").length;
   const fail = results.length - ok;
-  console.log(`[Download Media Tabs] Started ${ok} download(s), ${fail} failed to start.`, started);
+  console.log(`[Download Media Tabs] Started ${ok} download(s), ${fail} failed to start.`);
 }
 
-// Decide if a tab is a "single media file" and return a plan (unchanged logic)
+// ---------- Decision logic ----------
+
 async function decideTab(tab, settings) {
   const url = tab.url || "";
 
-  // 1) URL-based quick check
+  // 1) URL extension quick-pass
   const ext = extFromUrl(url);
   if (ext && MEDIA_EXTENSION_SET.has(ext)) {
     const mime = MEDIA_EXTENSIONS.get(ext);
@@ -288,16 +274,17 @@ async function decideTab(tab, settings) {
     }
   }
 
-  // 2) Probe the tab’s DOM (best-effort)
+  // 2) Probe the tab’s DOM
   try {
     const [{ result }] = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
-      func: probeDocument
+      func: probeDocument,
+      args: [!!settings.strictSingleDetection, Number(settings.coverageThreshold) || 0.5]
     });
 
     if (!result) return { shouldDownload: false };
 
-    const { contentType, single, src, href, looksLikePdf, protocol } = result;
+    const { contentType, href, protocol, single, src, looksLikePdf } = result;
 
     if (protocol === "blob:") return { shouldDownload: false };
 
@@ -322,7 +309,7 @@ async function decideTab(tab, settings) {
       };
     }
   } catch {
-    // script injection can fail on restricted pages
+    // Ignore restricted pages or injection failures
   }
 
   return { shouldDownload: false };
@@ -333,8 +320,13 @@ function absolutePrefer(src, href) {
   return href;
 }
 
-// Executed in the page (unchanged)
-function probeDocument() {
+// ---------- Page probe (strict) ----------
+// This runs in the page context. It returns a conservative decision:
+// - Accept immediately if the top-level document type is a media type.
+// - Otherwise, only accept when there is exactly ONE media element in the entire
+//   document, it is a DIRECT child of <body>, and it covers enough of the viewport.
+
+function probeDocument(strict = true, coverageThreshold = 0.5) {
   const out = {
     contentType: (document && document.contentType) || "",
     href: location.href,
@@ -344,46 +336,96 @@ function probeDocument() {
     looksLikePdf: false
   };
 
+  // Fast positive: Chrome's image/video/audio document or PDF viewer
+  if (/^(image|video|audio)\//i.test(out.contentType)) {
+    out.single = true;
+    const img = document.querySelector("img");
+    const vid = document.querySelector("video");
+    const aud = document.querySelector("audio");
+    out.src = (img && (img.currentSrc || img.src)) ||
+        (vid && (vid.currentSrc || (vid.querySelector("source") && vid.querySelector("source").src) || "")) ||
+        (aud && (aud.currentSrc || (aud.querySelector("source") && aud.querySelector("source").src) || "")) ||
+        "";
+    return out;
+  }
+  if (out.contentType === "application/pdf") {
+    out.single = true;
+    out.looksLikePdf = true;
+    const emb = document.querySelector("embed, object");
+    out.src = (emb && (emb.getAttribute("src") || "")) || "";
+    return out;
+  }
+
+  // Strict structural + coverage heuristic
   try {
-    const body = document.body;
-    if (body) {
-      const oneChild = body.children && body.children.length === 1 ? body.children[0] : null;
-      const img = oneChild && oneChild.tagName === "IMG" ? oneChild : document.querySelector("img:only-child");
-      const vid = oneChild && oneChild.tagName === "VIDEO" ? oneChild : document.querySelector("video:only-child");
-      const aud = oneChild && oneChild.tagName === "AUDIO" ? oneChild : document.querySelector("audio:only-child");
-      const embed = oneChild && (oneChild.tagName === "EMBED" || oneChild.tagName === "OBJECT") ? oneChild
-          : document.querySelector("embed:only-child, object:only-child");
+    const mediaSelector = "img, video, audio, embed, object";
+    const mediaElems = Array.from(document.querySelectorAll(mediaSelector));
 
-      if (img || vid || aud) {
+    if (!mediaElems.length) return out;
+
+    // Identify PDF embeds
+    const isPdfEmbed = (el) => {
+      const type = (el.getAttribute("type") || "").toLowerCase();
+      const src = (el.getAttribute("src") || "");
+      return type.includes("pdf") || /\.pdf(?:[#?].*)?$/i.test(src);
+    };
+
+    // If not strict, allow the old, looser rule but still avoid deep-only-child:
+    if (!strict) {
+      // One media element in the whole document AND it's the only child of <body>
+      const bodyDirectMedia = mediaElems.filter(el => el.parentElement === document.body);
+      if (mediaElems.length === 1 && bodyDirectMedia.length === 1) {
         out.single = true;
-        out.src = (img && (img.currentSrc || img.src)) ||
-            (vid && (vid.currentSrc || (vid.querySelector("source") && vid.querySelector("source").src) || "")) ||
-            (aud && (aud.currentSrc || (aud.querySelector("source") && aud.querySelector("source").src) || ""));
-      } else if (embed) {
-        const type = embed.type ? String(embed.type).toLowerCase() : "";
-        const src = embed.getAttribute("src") || "";
-        if (type.includes("pdf") || /\.pdf(?:[#?].*)?$/i.test(src) || document.contentType === "application/pdf") {
-          out.single = true;
-          out.looksLikePdf = true;
-          out.src = src || "";
-        }
+        out.looksLikePdf = bodyDirectMedia[0].tagName !== "IMG" && isPdfEmbed(bodyDirectMedia[0]);
+        out.src = srcFromMedia(bodyDirectMedia[0]);
       }
+      return out;
     }
 
-    if (!out.single && /^image\//i.test(out.contentType)) {
-      const img = document.querySelector("img");
-      if (img) {
-        out.single = true;
-        out.src = img.currentSrc || img.src || "";
-      } else {
-        out.single = true;
-      }
-    }
+    // STRICT MODE:
+    // 1) Exactly ONE media element in the entire document
+    if (mediaElems.length !== 1) return out;
 
-    if (!out.single && out.contentType === "application/pdf") {
-      out.single = true;
-      out.looksLikePdf = true;
-    }
-  } catch {}
+    const el = mediaElems[0];
+
+    // 2) It must be a DIRECT child of <body>
+    if (el.parentElement !== document.body) return out;
+
+    // 3) It must cover enough of the viewport (avoid banners/icons)
+    const vpW = Math.max(1, window.innerWidth || document.documentElement.clientWidth || 1);
+    const vpH = Math.max(1, window.innerHeight || document.documentElement.clientHeight || 1);
+    const vpArea = vpW * vpH;
+
+    let coverage = 0;
+    try {
+      const r = el.getBoundingClientRect();
+      const visW = Math.max(0, Math.min(r.width, vpW));
+      const visH = Math.max(0, Math.min(r.height, vpH));
+      coverage = (visW * visH) / vpArea;
+    } catch {}
+
+    if (coverage < Math.max(0, Math.min(1, coverageThreshold))) return out;
+
+    out.single = true;
+    out.looksLikePdf = (el.tagName !== "IMG") && isPdfEmbed(el);
+    out.src = srcFromMedia(el);
+  } catch {
+    // ignore
+  }
   return out;
+
+  function srcFromMedia(el) {
+    if (!el) return "";
+    if (el.tagName === "IMG") return el.currentSrc || el.src || "";
+    if (el.tagName === "VIDEO") {
+      return el.currentSrc || (el.querySelector("source") && el.querySelector("source").src) || "";
+    }
+    if (el.tagName === "AUDIO") {
+      return el.currentSrc || (el.querySelector("source") && el.querySelector("source").src) || "";
+    }
+    if (el.tagName === "EMBED" || el.tagName === "OBJECT") {
+      return el.getAttribute("src") || "";
+    }
+    return "";
+  }
 }

@@ -8,10 +8,10 @@
         fieldset { border: 1px solid #ccc; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
         legend { font-weight: 600; }
         label { display: block; margin: 8px 0; }
-        .row { display: flex; gap: 12px; align-items: center; }
+        .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
         input[type="text"], input[type="number"], select { padding: 6px 8px; }
         input[type="text"] { width: 100%; }
-        input[type="number"] { width: 120px; }
+        input[type="number"] { width: 110px; }
         button { padding: 8px 12px; }
         .note { color: #555; font-size: 12px; }
         code { background: #f6f6f6; padding: 1px 4px; border-radius: 4px; }
@@ -56,6 +56,17 @@
         <label>Download concurrency: <input id="downloadConcurrency" type="number" min="1" max="32" step="1" /></label>
     </div>
     <p class="note">Higher values finish faster but can increase CPU/network load. Defaults: 8 probe / 6 download.</p>
+</fieldset>
+
+<fieldset>
+    <legend>Detection</legend>
+    <label><input type="checkbox" id="strictSingleDetection"> Strict single-media detection (recommended)</label>
+    <div class="row">
+        <label>Viewport coverage threshold:
+            <input id="coverageThreshold" type="number" min="0" max="1" step="0.05" />
+        </label>
+    </div>
+    <p class="note">In strict mode, a page qualifies only if it has exactly one media element, it is a direct child of &lt;body&gt;, and it covers at least the given fraction of the viewport (default 0.5). This prevents false positives like banner images.</p>
 </fieldset>
 
 <fieldset>
