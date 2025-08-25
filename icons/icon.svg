@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Download Media Tabs — "rain of arrows" with precise carved notch -->
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="512" height="512" viewBox="0 0 2048 2048"
+     role="img" aria-labelledby="title desc">
+    <title id="title">Download Media Tabs icon</title>
+    <desc id="desc">Two blue downward arrows and two lower green arrows; the center green arrow has a carved notch formed by a
+        scaled, offset copy of the center arrow.
+    </desc>
+    <defs>
+        <!-- Reusable exact arrow (no Béziers) -->
+        <symbol id="arrow" viewBox="-96 -200 192 344">
+            <!-- stem -->
+            <rect x="-40" y="-188" width="80" height="200" rx="12" ry="12" fill="currentColor"/>
+            <!-- head (isosceles triangle) -->
+            <path fill="currentColor" d="M -67.845 0 L 67.845 0 A 12 12 0 0 1 76.502 20.31 L 8.657 90.983 A 12 12 0 0 1 -8.657 90.983 L -76.502 20.31 A 12 12 0 0 1 -67.845 0 Z"/>
+        </symbol>
+
+        <!-- Carve mask: subtract a scaled, slightly lowered copy of the CENTER arrow.
+             White keeps pixels; black cuts out. -->
+        <mask id="carve">
+            <rect width="100%" height="100%" fill="white"/>
+            <!--
+              Center arrow transform = translate(256,170) scale(1.00)
+              Carving transform below is:
+                translate(256,170) · scale(k) · translate(0,dy)
+              Choose k>1 for a wider notch; dy>0 to push the notch downward.
+            -->
+            <g transform="translate(-350,-1500) scale(1.2)">
+                <use href="#arrow" fill="black" transform="scale(1.12) translate(0,20)"/>
+            </g>
+        </mask>
+    </defs>
+
+    <!-- LEFT blue -->
+    <g transform="translate(0,500) scale(0.5)">
+        <use href="#arrow" style="color:#4194de"/>
+    </g>
+
+    <!-- CENTER blue -->
+    <g transform="translate(350,0) scale(0.7)">
+        <use href="#arrow" style="color:#4194de"/>
+    </g>
+
+    <!-- RIGHT green -->
+    <g transform="translate(1100,800) scale(0.5)">
+        <use href="#arrow" style="color:#45c877"/>
+    </g>
+
+    <!-- LOWER green with carved notch -->
+    <g mask="url(#carve)" transform="translate(350,700) scale(0.7)">
+        <use href="#arrow" style="color:#45c877"/>
+    </g>
+</svg>
