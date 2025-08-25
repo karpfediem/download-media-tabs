@@ -203,6 +203,12 @@ input:focus-visible, textarea:focus-visible, select:focus-visible{
 @media (max-width:900px){ .grid2{ grid-template-columns:1fr; } }
 
 .note{ color:var(--muted); font-size:12px; }
+.warning{
+    display:block; border:1px solid var(--ctp-yellow);
+    background: color-mix(in srgb, var(--ctp-yellow) 14%, transparent);
+    color: var(--text);
+    padding:10px 12px; border-radius: var(--radius);
+}
 .inline{ display:inline-flex; gap:8px; align-items:center; }
 .kbd{
     font:12px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;

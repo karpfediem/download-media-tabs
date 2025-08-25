@@ -46,6 +46,11 @@
             <!-- General -->
             <section class="panel" id="panel-general" role="tabpanel" aria-labelledby="tab-general">
                 <fieldset>
+                    <legend>How to use</legend>
+                    <p>Right‑click the extension toolbar icon to open quick actions and scope options.</p>
+                    <p class="warning"><strong>Warning:</strong> For silent bulk downloads, disable <em>Ask where to save each file before downloading</em> at <span class="kbd">chrome://settings/downloads</span>. Otherwise Chrome will show a Save dialog for every file.</p>
+                </fieldset>
+                <fieldset>
                     <legend>Scope &amp; naming</legend>
                     <div class="row">
                         <label>Default scope
@@ -244,8 +249,18 @@
             <section class="panel" id="panel-about" role="tabpanel" aria-labelledby="tab-about" hidden>
                 <fieldset>
                     <legend>About</legend>
-                    <p>This UI groups common preferences in <strong>General</strong> and keeps advanced settings in dedicated tabs. Styling uses the Catppuccin Mocha palette with solid colors only.</p>
-                    <p class="note">Tip: Right-click the toolbar icon for “current window” / “all windows”.</p>
+                    <p><strong>Download Media Tabs</strong> finds downloadable media (images, video, audio, PDFs) across your open tabs and saves them for you. It can also close tabs after their download finishes to help you clean up.</p>
+                    <p>I couldn’t find a simple Chromium extension that downloaded media from open tabs and closed them, so I built one and added features I hope others find useful.</p>
+                    <ul>
+                        <li>Adjust your scope: all windows, current window/tab group, tabs to the left/right.</li>
+                        <li>Flexible filename patterns, e.g. <span class="kbd">Media Tabs/{YYYYMMDD-HHmmss}/{host}/{basename}</span>.</li>
+                        <li>Filters: media types, size, image dimensions/megapixels, domain allow/deny, extensions, MIME patterns, and URL substrings.</li>
+                        <li>Post-actions: close tabs after download; keep window open if it would close the last tab.</li>
+                        <li>Tunable concurrency for faster bulk downloads.</li>
+                    </ul>
+                    <p><strong>Scope:</strong> This extension is designed exclusively for single‑media tabs — pages that display exactly one piece of content (for example, a direct image/video/audio/PDF URL). It does not crawl pages to discover assets and is <strong>not</strong> an image scraper.</p>
+                    <p class="note">How to use: Click the toolbar button to run with your default scope. Or right‑click the toolbar icon for quick actions like “current window” or “all windows”.</p>
+                    <p class="note">Privacy: All logic runs locally in your browser. The extension does not contact external services.</p>
                 </fieldset>
             </section>
         </div>
