@@ -9,7 +9,9 @@
         legend { font-weight: 600; }
         label { display: block; margin: 8px 0; }
         .row { display: flex; gap: 12px; align-items: center; }
-        input[type="text"] { width: 100%; padding: 6px 8px; }
+        input[type="text"], input[type="number"], select { padding: 6px 8px; }
+        input[type="text"] { width: 100%; }
+        input[type="number"] { width: 120px; }
         button { padding: 8px 12px; }
         .note { color: #555; font-size: 12px; }
         code { background: #f6f6f6; padding: 1px 4px; border-radius: 4px; }
@@ -24,7 +26,7 @@
     <label><input type="checkbox" id="includeVideo"> Video (video/*)</label>
     <label><input type="checkbox" id="includeAudio"> Audio (audio/*)</label>
     <label><input type="checkbox" id="includePdf"> PDF (application/pdf)</label>
-    <p class="note">Note: blob: media and some cross-origin players cannot be saved by extensions; they’re skipped.</p>
+    <p class="note">blob: media and some cross-origin players cannot be saved by extensions; they’re skipped.</p>
 </fieldset>
 
 <fieldset>
@@ -48,10 +50,19 @@
 </fieldset>
 
 <fieldset>
+    <legend>Performance</legend>
+    <div class="row">
+        <label>Probe concurrency (tabs): <input id="probeConcurrency" type="number" min="1" max="32" step="1" /></label>
+        <label>Download concurrency: <input id="downloadConcurrency" type="number" min="1" max="32" step="1" /></label>
+    </div>
+    <p class="note">Higher values finish faster but can increase CPU/network load. Defaults: 8 probe / 6 download.</p>
+</fieldset>
+
+<fieldset>
     <legend>After download</legend>
     <label><input type="checkbox" id="closeTabAfterDownload"> Close the tab after its file is downloaded</label>
     <p class="note">
-        To prevent repeated “Save file” dialogs, turn off
+        For silent bulk downloads, disable
         <em>Ask where to save each file before downloading</em> at <code>chrome://settings/downloads</code>.
     </p>
 </fieldset>

@@ -5,10 +5,18 @@ const DEFAULTS = {
     includePdf: true,
     scope: "currentWindow",
     filenamePattern: "Media Tabs/{YYYYMMDD-HHmmss}/{host}/{basename}",
-    closeTabAfterDownload: false
+    closeTabAfterDownload: false,
+    probeConcurrency: 8,
+    downloadConcurrency: 6
 };
 
 const $ = (id) => document.getElementById(id);
+
+function clampInt(v, lo, hi, dflt) {
+    const n = (v | 0);
+    if (!Number.isFinite(n)) return dflt;
+    return Math.max(lo, Math.min(hi, n));
+}
 
 function load() {
     chrome.storage.sync.get(DEFAULTS, (cfg) => {
@@ -19,6 +27,8 @@ function load() {
         $("scope").value = cfg.scope || "currentWindow";
         $("filenamePattern").value = cfg.filenamePattern || DEFAULTS.filenamePattern;
         $("closeTabAfterDownload").checked = !!cfg.closeTabAfterDownload;
+        $("probeConcurrency").value = clampInt(cfg.probeConcurrency, 1, 32, DEFAULTS.probeConcurrency);
+        $("downloadConcurrency").value = clampInt(cfg.downloadConcurrency, 1, 32, DEFAULTS.downloadConcurrency);
     });
 }
 
@@ -30,7 +40,9 @@ function save() {
         includePdf: $("includePdf").checked,
         scope: $("scope").value,
         filenamePattern: $("filenamePattern").value.trim() || DEFAULTS.filenamePattern,
-        closeTabAfterDownload: $("closeTabAfterDownload").checked
+        closeTabAfterDownload: $("closeTabAfterDownload").checked,
+        probeConcurrency: clampInt(parseInt($("probeConcurrency").value, 10), 1, 32, DEFAULTS.probeConcurrency),
+        downloadConcurrency: clampInt(parseInt($("downloadConcurrency").value, 10), 1, 32, DEFAULTS.downloadConcurrency)
     };
     chrome.storage.sync.set(cfg, () => {
         $("status").textContent = "Saved.";

@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Download Media Tabs",
   "description": "Download all open tabs that are a single media file (image, audio, video, PDF).",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "minimum_chrome_version": "114",
   "action": {
     "default_title": "Download media tabs"

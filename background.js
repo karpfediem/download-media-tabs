@@ -1,4 +1,4 @@
-// Download Media Tabs — background service worker (MV3)
+// Download Media Tabs — background service worker (MV3) with parallelism
 
 const DEFAULT_SETTINGS = {
   includeImages: true,
@@ -7,7 +7,9 @@ const DEFAULT_SETTINGS = {
   includePdf: true,
   scope: "currentWindow", // "currentWindow" | "allWindows"
   filenamePattern: "Media Tabs/{YYYYMMDD-HHmmss}/{host}/{basename}",
-  closeTabAfterDownload: false // NEW
+  closeTabAfterDownload: false,
+  probeConcurrency: 8,     // NEW: parallel probes of tabs
+  downloadConcurrency: 6   // NEW: parallel downloads
 };
 
 const MEDIA_EXTENSIONS = new Map([
@@ -16,16 +18,13 @@ const MEDIA_EXTENSIONS = new Map([
   ["png", "image/png"], ["gif", "image/gif"], ["webp", "image/webp"],
   ["bmp", "image/bmp"], ["tif", "image/tiff"], ["tiff", "image/tiff"],
   ["svg", "image/svg+xml"], ["avif", "image/avif"],
-
   // video
   ["mp4", "video/mp4"], ["m4v", "video/x-m4v"], ["mov", "video/quicktime"],
   ["webm", "video/webm"], ["mkv", "video/x-matroska"], ["avi", "video/x-msvideo"],
   ["ogv", "video/ogg"],
-
   // audio
   ["mp3", "audio/mpeg"], ["m4a", "audio/mp4"], ["aac", "audio/aac"],
   ["flac", "audio/flac"], ["wav", "audio/wav"], ["ogg", "audio/ogg"], ["oga", "audio/ogg"],
-
   // documents
   ["pdf", "application/pdf"]
 ]);
@@ -145,17 +144,16 @@ chrome.action.onClicked.addListener(async () => {
 // Track downloads we initiated to close corresponding tabs
 const downloadIdToTabId = new Map();
 
+// Close only when the specific download completes successfully
 chrome.downloads.onChanged.addListener(async (delta) => {
   if (!delta || typeof delta.id !== "number") return;
   const tabId = downloadIdToTabId.get(delta.id);
   if (tabId == null) return;
 
-  // Close only when the specific download completes successfully
   if (delta.state && delta.state.current === "complete") {
     try {
       const settings = await getSettings();
       if (settings.closeTabAfterDownload) {
-        // Make sure tab still exists; ignore errors if it was closed manually.
         chrome.tabs.remove(tabId, () => void chrome.runtime.lastError);
       }
     } finally {
@@ -163,16 +161,40 @@ chrome.downloads.onChanged.addListener(async (delta) => {
     }
   }
 
-  // If the download was interrupted or cancelled, do not close the tab.
   if (delta.error || (delta.state && delta.state.current === "interrupted")) {
     downloadIdToTabId.delete(delta.id);
   }
 });
 
+// -------- Parallelization helpers --------
+
+function pLimit(concurrency) {
+  let active = 0;
+  const queue = [];
+  const next = () => {
+    active--;
+    if (queue.length) {
+      const { fn, resolve, reject } = queue.shift();
+      run(fn).then(resolve, reject);
+    }
+  };
+  const run = async (fn) => {
+    active++;
+    try { return await fn(); } finally { next(); }
+  };
+  return (fn) => new Promise((resolve, reject) => {
+    if (active < concurrency) run(fn).then(resolve, reject);
+    else queue.push({ fn, resolve, reject });
+  });
+}
+
+// -------- Main flow (now parallel) --------
+
 async function runDownload(scope) {
   const settings = await getSettings();
   const allTabs = await chrome.tabs.query(scope === "allWindows" ? {} : { currentWindow: true });
 
+  // Filter out unsupported schemes
   const candidateTabs = allTabs.filter(t => {
     try {
       const u = new URL(t.url || "");
@@ -186,13 +208,30 @@ async function runDownload(scope) {
   }
 
   const stampDate = new Date();
-  let started = 0;
 
-  for (const tab of candidateTabs) {
-    const decision = await decideTab(tab, settings);
-    if (!decision.shouldDownload) continue;
+  // 1) Decide in parallel with a concurrency cap
+  const limitProbe = pLimit(Math.max(1, settings.probeConcurrency | 0));
+  const decisions = await Promise.allSettled(
+      candidateTabs.map(tab => limitProbe(() => decideTab(tab, settings)))
+  );
 
-    const { downloadUrl, suggestedExt, baseName } = decision;
+  // 2) Build download tasks; also dedupe by final download URL
+  const seenUrl = new Map(); // url -> tabId that "owns" it (first wins, used for closing)
+  const tasks = [];
+  for (let i = 0; i < decisions.length; i++) {
+    const res = decisions[i];
+    if (res.status !== "fulfilled" || !res.value || !res.value.shouldDownload) continue;
+
+    const tab = candidateTabs[i];
+    const { downloadUrl, suggestedExt, baseName } = res.value;
+
+    if (!downloadUrl) continue;
+    if (seenUrl.has(downloadUrl)) {
+      // Another tab already schedules this same URL; skip this duplicate to avoid double download.
+      continue;
+    }
+    seenUrl.set(downloadUrl, tab.id);
+
     const host = hostFromUrl(downloadUrl);
     const ext = suggestedExt || extFromUrl(downloadUrl) || "bin";
     const filename = buildFilename(settings.filenamePattern, {
@@ -202,25 +241,36 @@ async function runDownload(scope) {
       ext
     });
 
-    try {
-      const downloadId = await chrome.downloads.download({
-        url: downloadUrl,
-        filename,
-        saveAs: false,              // ensures no dialog IF user setting is off
-        conflictAction: "uniquify"
-      });
-      if (typeof downloadId === "number") {
-        downloadIdToTabId.set(downloadId, tab.id);
-        started++;
-      }
-    } catch (e) {
-      console.warn(`[Download Media Tabs] Failed to download ${downloadUrl}:`, e);
-    }
+    tasks.push({ tabId: tab.id, url: downloadUrl, filename });
   }
 
-  console.log(`[Download Media Tabs] Started ${started} download(s).`);
+  if (!tasks.length) {
+    console.log("[Download Media Tabs] Nothing to download after probing.");
+    return;
+  }
+
+  // 3) Start downloads in parallel (rate-limited)
+  const limitDl = pLimit(Math.max(1, settings.downloadConcurrency | 0));
+  const started = [];
+  const results = await Promise.allSettled(tasks.map(t => limitDl(async () => {
+    const downloadId = await chrome.downloads.download({
+      url: t.url,
+      filename: t.filename,
+      saveAs: false,
+      conflictAction: "uniquify"
+    });
+    if (typeof downloadId === "number") {
+      downloadIdToTabId.set(downloadId, t.tabId);
+      started.push({ downloadId, tabId: t.tabId, url: t.url, filename: t.filename });
+    }
+  })));
+
+  const ok = results.filter(r => r.status === "fulfilled").length;
+  const fail = results.length - ok;
+  console.log(`[Download Media Tabs] Started ${ok} download(s), ${fail} failed to start.`, started);
 }
 
+// Decide if a tab is a "single media file" and return a plan (unchanged logic)
 async function decideTab(tab, settings) {
   const url = tab.url || "";
 
@@ -283,7 +333,7 @@ function absolutePrefer(src, href) {
   return href;
 }
 
-// Executed in the page
+// Executed in the page (unchanged)
 function probeDocument() {
   const out = {
     contentType: (document && document.contentType) || "",
