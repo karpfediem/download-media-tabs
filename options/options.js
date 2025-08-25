@@ -109,6 +109,84 @@ function setDisabled(el, disabled) {
     });
 }
 
+// Avoid prototype pollution by filtering unsafe keys
+function isSafeKey(key) {
+    return key !== '__proto__' && key !== 'prototype' && key !== 'constructor';
+}
+
+function safeMergeFilters(base, incoming) {
+    const out = {};
+    const src = (typeof base === 'object' && base) ? base : {};
+    const inc = (typeof incoming === 'object' && incoming) ? incoming : {};
+    const keys = [
+        'minWidth','minHeight','maxWidth','maxHeight',
+        'minMegapixels','maxMegapixels',
+        'minBytes','maxBytes',
+        'allowedDomains','blockedDomains',
+        'allowedExtensions','blockedExtensions',
+        'allowedMime','blockedMime',
+        'includeUrlSubstrings','excludeUrlSubstrings'
+    ];
+    for (const k of keys) {
+        if (!isSafeKey(k)) continue;
+        const v = Object.prototype.hasOwnProperty.call(inc, k) ? inc[k] : src[k];
+        out[k] = v;
+    }
+    return out;
+}
+
+function sanitizeSettingsInput(input) {
+    const cfg = (typeof input === 'object' && input) ? input : {};
+    const sanitized = {};
+    // General
+    sanitized.scope = typeof cfg.scope === 'string' ? cfg.scope : DEFAULTS.scope;
+    sanitized.filenamePattern = typeof cfg.filenamePattern === 'string' && cfg.filenamePattern.trim() ? cfg.filenamePattern.trim() : DEFAULTS.filenamePattern;
+    sanitized.theme = (cfg.theme === 'light' || cfg.theme === 'dark' || cfg.theme === 'system') ? cfg.theme : DEFAULTS.theme;
+
+    // Media types
+    sanitized.includeImages = !!cfg.includeImages;
+    sanitized.includeVideo = !!cfg.includeVideo;
+    sanitized.includeAudio = !!cfg.includeAudio;
+    sanitized.includePdf = !!cfg.includePdf;
+
+    // Detection
+    sanitized.strictSingleDetection = cfg.strictSingleDetection !== false;
+    sanitized.coverageThreshold = clampFloat(cfg.coverageThreshold, 0, 1, DEFAULTS.coverageThreshold);
+
+    // Performance
+    sanitized.probeConcurrency = clampInt(cfg.probeConcurrency, 1, 32, DEFAULTS.probeConcurrency);
+    sanitized.downloadConcurrency = clampInt(cfg.downloadConcurrency, 1, 32, DEFAULTS.downloadConcurrency);
+
+    // After
+    sanitized.closeTabAfterDownload = !!cfg.closeTabAfterDownload;
+    sanitized.keepWindowOpenOnLastTabClose = !!cfg.keepWindowOpenOnLastTabClose;
+
+    // Filters
+    sanitized.filtersEnabled = !!cfg.filtersEnabled;
+    const incomingFilters = (typeof cfg.filters === 'object' && cfg.filters) ? cfg.filters : {};
+    const mergedFilters = safeMergeFilters(DEFAULTS.filters, incomingFilters);
+    sanitized.filters = {
+        minWidth: clampInt(mergedFilters.minWidth, 0, 100000, 0),
+        minHeight: clampInt(mergedFilters.minHeight, 0, 100000, 0),
+        maxWidth: clampInt(mergedFilters.maxWidth, 0, 100000, 0),
+        maxHeight: clampInt(mergedFilters.maxHeight, 0, 100000, 0),
+        minMegapixels: clampFloat(mergedFilters.minMegapixels, 0, 10000, 0),
+        maxMegapixels: clampFloat(mergedFilters.maxMegapixels, 0, 10000, 0),
+        minBytes: Math.max(0, Number(mergedFilters.minBytes) || 0),
+        maxBytes: Math.max(0, Number(mergedFilters.maxBytes) || 0),
+        allowedDomains: Array.isArray(mergedFilters.allowedDomains) ? normalizeDomainList(mergedFilters.allowedDomains.map(String)) : [],
+        blockedDomains: Array.isArray(mergedFilters.blockedDomains) ? normalizeDomainList(mergedFilters.blockedDomains.map(String)) : [],
+        allowedExtensions: Array.isArray(mergedFilters.allowedExtensions) ? normalizeExtList(mergedFilters.allowedExtensions.map(String)) : [],
+        blockedExtensions: Array.isArray(mergedFilters.blockedExtensions) ? normalizeExtList(mergedFilters.blockedExtensions.map(String)) : [],
+        allowedMime: Array.isArray(mergedFilters.allowedMime) ? mergedFilters.allowedMime.map(v => String(v).trim().toLowerCase()).filter(Boolean) : [],
+        blockedMime: Array.isArray(mergedFilters.blockedMime) ? mergedFilters.blockedMime.map(v => String(v).trim().toLowerCase()).filter(Boolean) : [],
+        includeUrlSubstrings: Array.isArray(mergedFilters.includeUrlSubstrings) ? mergedFilters.includeUrlSubstrings.map(v => String(v).trim()).filter(Boolean) : [],
+        excludeUrlSubstrings: Array.isArray(mergedFilters.excludeUrlSubstrings) ? mergedFilters.excludeUrlSubstrings.map(v => String(v).trim()).filter(Boolean) : []
+    };
+
+    return sanitized;
+}
+
 // ---------- Tabs (accessible) ----------
 
 const tabIds = ["general", "after", "detection", "performance", "theme", "presets", "about"];
@@ -183,35 +261,36 @@ function applyTheme(theme) {
 function load() {
     IS_LOADING = true;
     chrome.storage.sync.get(DEFAULTS, (cfg) => {
+        const safeCfg = sanitizeSettingsInput(cfg);
         // General
-        $("scope").value           = cfg.scope || DEFAULTS.scope;
-        $("filenamePattern").value = cfg.filenamePattern || DEFAULTS.filenamePattern;
+        $("scope").value           = safeCfg.scope || DEFAULTS.scope;
+        $("filenamePattern").value = safeCfg.filenamePattern || DEFAULTS.filenamePattern;
         // Theme
-        const theme = cfg.theme || DEFAULTS.theme;
+        const theme = safeCfg.theme || DEFAULTS.theme;
         $("theme").value = theme;
         applyTheme(theme);
 
         // Media types (always applied)
-        $("includeImages").checked = !!cfg.includeImages;
-        $("includeVideo").checked  = !!cfg.includeVideo;
-        $("includeAudio").checked  = !!cfg.includeAudio;
-        $("includePdf").checked    = !!cfg.includePdf;
+        $("includeImages").checked = !!safeCfg.includeImages;
+        $("includeVideo").checked  = !!safeCfg.includeVideo;
+        $("includeAudio").checked  = !!safeCfg.includeAudio;
+        $("includePdf").checked    = !!safeCfg.includePdf;
 
         // Detection
-        $("strictSingleDetection").checked = cfg.strictSingleDetection !== false;
-        $("coverageThreshold").value = clampFloat(cfg.coverageThreshold, 0, 1, DEFAULTS.coverageThreshold);
+        $("strictSingleDetection").checked = safeCfg.strictSingleDetection !== false;
+        $("coverageThreshold").value = clampFloat(safeCfg.coverageThreshold, 0, 1, DEFAULTS.coverageThreshold);
 
         // Performance
-        $("probeConcurrency").value    = clampInt(cfg.probeConcurrency, 1, 32, DEFAULTS.probeConcurrency);
-        $("downloadConcurrency").value = clampInt(cfg.downloadConcurrency, 1, 32, DEFAULTS.downloadConcurrency);
+        $("probeConcurrency").value    = clampInt(safeCfg.probeConcurrency, 1, 32, DEFAULTS.probeConcurrency);
+        $("downloadConcurrency").value = clampInt(safeCfg.downloadConcurrency, 1, 32, DEFAULTS.downloadConcurrency);
 
         // After
-        $("closeTabAfterDownload").checked = !!cfg.closeTabAfterDownload;
-        $("keepWindowOpenOnLastTabClose").checked = !!cfg.keepWindowOpenOnLastTabClose;
+        $("closeTabAfterDownload").checked = !!safeCfg.closeTabAfterDownload;
+        $("keepWindowOpenOnLastTabClose").checked = !!safeCfg.keepWindowOpenOnLastTabClose;
 
         // Filters
-        const filters = Object.assign({}, DEFAULTS.filters, cfg.filters);
-        $("filtersEnabled").checked = !!cfg.filtersEnabled;
+        const filters = safeMergeFilters(DEFAULTS.filters, safeCfg.filters);
+        $("filtersEnabled").checked = !!safeCfg.filtersEnabled;
 
         // Dimensions
         $("minWidth").value      = String(filters.minWidth || 0);
@@ -243,7 +322,7 @@ function load() {
         updatePatternPreview();
 
         // Update baseline and save button
-        LAST_SAVED = cfg;
+        LAST_SAVED = safeCfg;
         IS_LOADING = false;
         updateSaveEnabled();
     });
@@ -315,7 +394,7 @@ function stableStringify(value) {
         if (seen.has(v)) return undefined; // avoid cycles (shouldn't exist here)
         seen.add(v);
         if (Array.isArray(v)) return v.map(helper);
-        const keys = Object.keys(v).sort();
+        const keys = Object.keys(v).filter(isSafeKey).sort();
         const out = {};
         for (const k of keys) out[k] = helper(v[k]);
         return out;
@@ -368,14 +447,30 @@ function reflectFiltersEnabledState() {
 // ---------- Export / Import ----------
 
 function pickSettingsOnly(obj) {
-    const o = { ...obj };
-    delete o.presets; // do not include presets in a settings backup
-    return o;
+    const cfg = (typeof obj === 'object' && obj) ? obj : {};
+    const allowedTop = [
+        'scope','filenamePattern','theme',
+        'includeImages','includeVideo','includeAudio','includePdf',
+        'strictSingleDetection','coverageThreshold',
+        'probeConcurrency','downloadConcurrency',
+        'closeTabAfterDownload','keepWindowOpenOnLastTabClose',
+        'filtersEnabled','filters'
+    ];
+    const out = {};
+    for (const k of allowedTop) {
+        if (!isSafeKey(k)) continue;
+        if (Object.prototype.hasOwnProperty.call(cfg, k)) out[k] = cfg[k];
+    }
+    // Ensure filters shape is plain, if present
+    if (typeof out.filters === 'object' && out.filters) {
+        out.filters = safeMergeFilters(DEFAULTS.filters, out.filters);
+    }
+    return out;
 }
 
 function exportSettings() {
     chrome.storage.sync.get(DEFAULTS, (cfg) => {
-        const data = pickSettingsOnly(cfg);
+        const data = pickSettingsOnly(sanitizeSettingsInput(cfg));
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -392,6 +487,11 @@ function exportSettings() {
 
 function importFromFile(file) {
     if (!file) return;
+    // Limit file size to prevent accidental huge imports (1 MB)
+    if (file.size > 1024 * 1024) {
+        showToast("Import failed (file too large).", 'error', 2500);
+        return;
+    }
     const reader = new FileReader();
     reader.onerror = () => {
         showToast("Import failed (file read error).", 'error', 2000);
@@ -400,13 +500,11 @@ function importFromFile(file) {
         try {
             const obj = JSON.parse(String(reader.result || '{}'));
             if (typeof obj !== 'object' || !obj) throw new Error('Invalid JSON');
-            // Shallow validation: must contain at least some known keys
-            const knownKeys = ['scope','filenamePattern','theme','includeImages','includeVideo','includeAudio','includePdf','filtersEnabled','filters'];
-            const ok = knownKeys.some(k => Object.prototype.hasOwnProperty.call(obj, k));
-            if (!ok) throw new Error('Not a settings file');
             // Do not allow presets to be imported via this path
-            delete obj.presets;
-            chrome.storage.sync.set(obj, () => {
+            if (Object.prototype.hasOwnProperty.call(obj, 'presets')) delete obj.presets;
+            // Sanitize and only accept whitelisted fields
+            const sanitized = sanitizeSettingsInput(obj);
+            chrome.storage.sync.set(sanitized, () => {
                 load();
                 showToast("Imported options.json.", 'success');
             });
@@ -466,14 +564,13 @@ function saveCurrentAsPreset() {
         return;
     }
     chrome.storage.sync.get({ presets: {} }, (store) => {
-        chrome.storage.sync.get(DEFAULTS, (cfg) => {
-            const presets = store.presets || {};
-            const payload = pickSettingsOnly(cfg);
-            presets[name] = payload;
-            chrome.storage.sync.set({ presets }, () => {
-                loadPresetsUI();
-                showToast("Preset '" + name + "' saved.", 'success', 1200);
-            });
+        const presets = store.presets || {};
+        // Save exactly what is currently in the UI (already sanitized by buildConfigFromUI)
+        const payload = pickSettingsOnly(buildConfigFromUI());
+        presets[name] = payload;
+        chrome.storage.sync.set({ presets }, () => {
+            loadPresetsUI();
+            showToast("Preset '" + name + "' saved.", 'success', 1200);
         });
     });
 }
@@ -483,7 +580,8 @@ function applyPresetByName(name) {
     chrome.storage.sync.get({ presets: {} }, (store) => {
         const preset = (store.presets || {})[name];
         if (!preset) return;
-        chrome.storage.sync.set(preset, () => {
+        const sanitized = sanitizeSettingsInput(preset);
+        chrome.storage.sync.set(sanitized, () => {
             load();
             showToast("Preset '" + name + "' applied.", 'success', 1200);
         });
@@ -513,7 +611,10 @@ function showToast(message, type = 'info', duration = 1600) {
             return c;
         })();
         const el = document.createElement('div');
-        el.className = `toast ${type}`;
+        const allowed = new Set(['info','success','error','warn']);
+        const t = String(type || 'info');
+        const safeType = allowed.has(t) ? t : 'info';
+        el.classList.add('toast', safeType);
         el.textContent = String(message || '');
         container.appendChild(el);
         const hide = () => {
@@ -522,7 +623,8 @@ function showToast(message, type = 'info', duration = 1600) {
                 el.remove();
             }, { once:true });
         };
-        setTimeout(hide, Math.max(600, Number(duration) || 1600));
+        const ms = Math.max(600, Math.min(10000, Number(duration) || 1600));
+        setTimeout(hide, ms);
         return el;
     }catch(e){
         // Fallback: no-op
