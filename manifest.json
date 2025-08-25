@@ -19,8 +19,8 @@
     }
   },
 
-  "background": { "service_worker": "background.js", "type": "module" },
+  "background": { "service_worker": "src/background.js", "type": "module" },
   "permissions": ["tabs", "downloads", "scripting", "storage", "contextMenus"],
   "host_permissions": ["<all_urls>"],
-  "options_page": "options.html"
+  "options_page": "options/options.html"
 }
