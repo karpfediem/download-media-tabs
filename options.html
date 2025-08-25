@@ -50,6 +50,16 @@
 </fieldset>
 
 <fieldset>
+    <legend>After download</legend>
+    <p class="note">
+        For silent bulk downloads, disable
+        <em>Ask where to save each file before downloading</em> at <code>chrome://settings/downloads</code>.
+    </p>
+    <label><input type="checkbox" id="closeTabAfterDownload"> Close the tab after its file is downloaded</label>
+    <label><input type="checkbox" id="keepWindowOpenOnLastTabClose"> Keep window open if this would close its last tab</label>
+</fieldset>
+
+<fieldset>
     <legend>Performance</legend>
     <div class="row">
         <label>Probe concurrency (tabs): <input id="probeConcurrency" type="number" min="1" max="32" step="1" /></label>
@@ -66,16 +76,7 @@
             <input id="coverageThreshold" type="number" min="0" max="1" step="0.05" />
         </label>
     </div>
-    <p class="note">In strict mode, a page qualifies only if it has exactly one media element, it is a direct child of &lt;body&gt;, and it covers at least the given fraction of the viewport (default 0.5). This prevents false positives like banner images.</p>
-</fieldset>
-
-<fieldset>
-    <legend>After download</legend>
-    <label><input type="checkbox" id="closeTabAfterDownload"> Close the tab after its file is downloaded</label>
-    <p class="note">
-        For silent bulk downloads, disable
-        <em>Ask where to save each file before downloading</em> at <code>chrome://settings/downloads</code>.
-    </p>
+    <p class="note">In strict mode, a page qualifies only if it has exactly one media element, it is a direct child of &lt;body&gt;, and it covers at least the given fraction of the viewport (default 0.5).</p>
 </fieldset>
 
 <div class="row">

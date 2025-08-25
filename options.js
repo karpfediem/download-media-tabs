@@ -9,7 +9,8 @@ const DEFAULTS = {
     probeConcurrency: 8,
     downloadConcurrency: 6,
     strictSingleDetection: true,
-    coverageThreshold: 0.5
+    coverageThreshold: 0.5,
+    keepWindowOpenOnLastTabClose: false
 };
 
 const $ = (id) => document.getElementById(id);
@@ -34,11 +35,15 @@ function load() {
         $("includePdf").checked = !!cfg.includePdf;
         $("scope").value = cfg.scope || "currentWindow";
         $("filenamePattern").value = cfg.filenamePattern || DEFAULTS.filenamePattern;
-        $("closeTabAfterDownload").checked = !!cfg.closeTabAfterDownload;
+
         $("probeConcurrency").value = clampInt(cfg.probeConcurrency, 1, 32, DEFAULTS.probeConcurrency);
         $("downloadConcurrency").value = clampInt(cfg.downloadConcurrency, 1, 32, DEFAULTS.downloadConcurrency);
+
         $("strictSingleDetection").checked = cfg.strictSingleDetection !== false;
         $("coverageThreshold").value = clampFloat(cfg.coverageThreshold, 0, 1, DEFAULTS.coverageThreshold);
+
+        $("closeTabAfterDownload").checked = !!cfg.closeTabAfterDownload;
+        $("keepWindowOpenOnLastTabClose").checked = !!cfg.keepWindowOpenOnLastTabClose;
     });
 }
 
@@ -50,11 +55,15 @@ function save() {
         includePdf: $("includePdf").checked,
         scope: $("scope").value,
         filenamePattern: $("filenamePattern").value.trim() || DEFAULTS.filenamePattern,
-        closeTabAfterDownload: $("closeTabAfterDownload").checked,
+
         probeConcurrency: clampInt(parseInt($("probeConcurrency").value, 10), 1, 32, DEFAULTS.probeConcurrency),
         downloadConcurrency: clampInt(parseInt($("downloadConcurrency").value, 10), 1, 32, DEFAULTS.downloadConcurrency),
+
         strictSingleDetection: $("strictSingleDetection").checked,
-        coverageThreshold: clampFloat(parseFloat($("coverageThreshold").value), 0, 1, DEFAULTS.coverageThreshold)
+        coverageThreshold: clampFloat(parseFloat($("coverageThreshold").value), 0, 1, DEFAULTS.coverageThreshold),
+
+        closeTabAfterDownload: $("closeTabAfterDownload").checked,
+        keepWindowOpenOnLastTabClose: $("keepWindowOpenOnLastTabClose").checked
     };
     chrome.storage.sync.set(cfg, () => {
         $("status").textContent = "Saved.";

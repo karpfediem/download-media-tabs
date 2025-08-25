@@ -1,4 +1,5 @@
-// Download Media Tabs — background service worker (MV3) with parallelism + strict single-media detection
+// Download Media Tabs — background service worker (MV3) with parallelism, strict detection,
+// and keep-window-open safeguard when closing the last tab.
 
 const DEFAULT_SETTINGS = {
   includeImages: true,
@@ -11,19 +12,24 @@ const DEFAULT_SETTINGS = {
   probeConcurrency: 8,
   downloadConcurrency: 6,
   strictSingleDetection: true,
-  coverageThreshold: 0.5
+  coverageThreshold: 0.5,
+  keepWindowOpenOnLastTabClose: false
 };
 
 const MEDIA_EXTENSIONS = new Map([
+  // images
   ["jpg", "image/jpeg"], ["jpeg", "image/jpeg"], ["jpe", "image/jpeg"],
   ["png", "image/png"], ["gif", "image/gif"], ["webp", "image/webp"],
   ["bmp", "image/bmp"], ["tif", "image/tiff"], ["tiff", "image/tiff"],
   ["svg", "image/svg+xml"], ["avif", "image/avif"],
+  // video
   ["mp4", "video/mp4"], ["m4v", "video/x-m4v"], ["mov", "video/quicktime"],
   ["webm", "video/webm"], ["mkv", "video/x-matroska"], ["avi", "video/x-msvideo"],
   ["ogv", "video/ogg"],
+  // audio
   ["mp3", "audio/mpeg"], ["m4a", "audio/mp4"], ["aac", "audio/aac"],
   ["flac", "audio/flac"], ["wav", "audio/wav"], ["ogg", "audio/ogg"], ["oga", "audio/ogg"],
+  // documents
   ["pdf", "application/pdf"]
 ]);
 
@@ -151,7 +157,7 @@ chrome.downloads.onChanged.addListener(async (delta) => {
     try {
       const settings = await getSettings();
       if (settings.closeTabAfterDownload) {
-        chrome.tabs.remove(tabId, () => void chrome.runtime.lastError);
+        await closeTabRespectingWindow(tabId, settings);
       }
     } finally {
       downloadIdToTabId.delete(delta.id);
@@ -320,12 +326,7 @@ function absolutePrefer(src, href) {
   return href;
 }
 
-// ---------- Page probe (strict) ----------
-// This runs in the page context. It returns a conservative decision:
-// - Accept immediately if the top-level document type is a media type.
-// - Otherwise, only accept when there is exactly ONE media element in the entire
-//   document, it is a DIRECT child of <body>, and it covers enough of the viewport.
-
+// Executed in the page
 function probeDocument(strict = true, coverageThreshold = 0.5) {
   const out = {
     contentType: (document && document.contentType) || "",
@@ -336,7 +337,7 @@ function probeDocument(strict = true, coverageThreshold = 0.5) {
     looksLikePdf: false
   };
 
-  // Fast positive: Chrome's image/video/audio document or PDF viewer
+  // Fast positive: top-level image/video/audio/PDF documents
   if (/^(image|video|audio)\//i.test(out.contentType)) {
     out.single = true;
     const img = document.querySelector("img");
@@ -356,23 +357,18 @@ function probeDocument(strict = true, coverageThreshold = 0.5) {
     return out;
   }
 
-  // Strict structural + coverage heuristic
   try {
     const mediaSelector = "img, video, audio, embed, object";
     const mediaElems = Array.from(document.querySelectorAll(mediaSelector));
-
     if (!mediaElems.length) return out;
 
-    // Identify PDF embeds
     const isPdfEmbed = (el) => {
       const type = (el.getAttribute("type") || "").toLowerCase();
       const src = (el.getAttribute("src") || "");
       return type.includes("pdf") || /\.pdf(?:[#?].*)?$/i.test(src);
     };
 
-    // If not strict, allow the old, looser rule but still avoid deep-only-child:
     if (!strict) {
-      // One media element in the whole document AND it's the only child of <body>
       const bodyDirectMedia = mediaElems.filter(el => el.parentElement === document.body);
       if (mediaElems.length === 1 && bodyDirectMedia.length === 1) {
         out.single = true;
@@ -382,16 +378,10 @@ function probeDocument(strict = true, coverageThreshold = 0.5) {
       return out;
     }
 
-    // STRICT MODE:
-    // 1) Exactly ONE media element in the entire document
     if (mediaElems.length !== 1) return out;
-
     const el = mediaElems[0];
-
-    // 2) It must be a DIRECT child of <body>
     if (el.parentElement !== document.body) return out;
 
-    // 3) It must cover enough of the viewport (avoid banners/icons)
     const vpW = Math.max(1, window.innerWidth || document.documentElement.clientWidth || 1);
     const vpH = Math.max(1, window.innerHeight || document.documentElement.clientHeight || 1);
     const vpArea = vpW * vpH;
@@ -409,9 +399,7 @@ function probeDocument(strict = true, coverageThreshold = 0.5) {
     out.single = true;
     out.looksLikePdf = (el.tagName !== "IMG") && isPdfEmbed(el);
     out.src = srcFromMedia(el);
-  } catch {
-    // ignore
-  }
+  } catch {}
   return out;
 
   function srcFromMedia(el) {
@@ -427,5 +415,36 @@ function probeDocument(strict = true, coverageThreshold = 0.5) {
       return el.getAttribute("src") || "";
     }
     return "";
+  }
+}
+
+// ---------- Window-preservation close ----------
+
+async function closeTabRespectingWindow(tabId, settings) {
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    if (!tab || typeof tab.windowId !== "number") {
+      chrome.tabs.remove(tabId, () => void chrome.runtime.lastError);
+      return;
+    }
+    if (!settings.keepWindowOpenOnLastTabClose) {
+      chrome.tabs.remove(tabId, () => void chrome.runtime.lastError);
+      return;
+    }
+
+    // Count tabs in the same window *at the time of closure*.
+    const tabsInWindow = await chrome.tabs.query({ windowId: tab.windowId });
+    if (!Array.isArray(tabsInWindow) || tabsInWindow.length <= 1) {
+      // This tab is (likely) the last one: open a newtab first.
+      try {
+        await chrome.tabs.create({ windowId: tab.windowId, url: "chrome://newtab/" });
+      } catch {
+        // Creating new tab may fail in some special windows; proceed to remove anyway.
+      }
+    }
+
+    chrome.tabs.remove(tabId, () => void chrome.runtime.lastError);
+  } catch {
+    // If we cannot get the tab (already closed, etc.), nothing to do.
   }
 }
