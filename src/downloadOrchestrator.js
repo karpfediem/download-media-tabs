@@ -87,7 +87,7 @@ export async function runDownload({ mode }) {
   if (hasSizeRule) {
     const limitHead = pLimit(Math.max(1, settings.probeConcurrency | 0));
     const headResults = await Promise.allSettled(plans.map(p => limitHead(async () => {
-      const bytes = await headContentLength(p.url, 5000);
+      const bytes = await headContentLength(p.url, 15000);
       if (bytes == null || bytes < 0) return { known: false, ok: true };
       const ok = sizeWithin(bytes, f.minBytes, f.maxBytes);
       return { known: true, ok, bytes };

@@ -4,7 +4,7 @@ export function sizeWithin(bytes, minBytes, maxBytes) {
   return true;
 }
 
-export async function headContentLength(url, timeoutMs = 5000) {
+export async function headContentLength(url, timeoutMs = 15000) {
   try {
     const u = new URL(url);
     if (u.protocol !== "http:" && u.protocol !== "https:") return null;
