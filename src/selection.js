@@ -3,6 +3,12 @@ export async function selectCandidateTabs(mode) {
     case "allWindows": {
       return chrome.tabs.query({});
     }
+    case "selectedTabs": {
+      // Tabs multi-selection uses the `highlighted` property
+      const selected = await chrome.tabs.query({ currentWindow: true, highlighted: true });
+      // Fallback: if none highlighted, default to current window
+      return (selected && selected.length) ? selected : chrome.tabs.query({ currentWindow: true });
+    }
     case "leftOfActive":
     case "rightOfActive":
     case "currentGroup":

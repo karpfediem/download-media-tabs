@@ -2,11 +2,12 @@ import { getSettings } from './settings.js';
 
 export function setDefaultContextMenus() {
   chrome.contextMenus.removeAll(() => {
-    chrome.contextMenus.create({ id: "dmt-current", title: "Download media tabs (current window)", contexts: ["action"] });
-    chrome.contextMenus.create({ id: "dmt-all",     title: "Download media tabs (all windows)",    contexts: ["action"] });
-    chrome.contextMenus.create({ id: "dmt-left",    title: "Download media tabs to the LEFT (incl. current)",  contexts: ["action"] });
-    chrome.contextMenus.create({ id: "dmt-right",   title: "Download media tabs to the RIGHT (incl. current)", contexts: ["action"] });
-    chrome.contextMenus.create({ id: "dmt-group",   title: "Download media tabs in CURRENT TAB GROUP",         contexts: ["action"] });
+    chrome.contextMenus.create({ id: "dmt-current",  title: "Download media tabs (current window)",         contexts: ["action"] });
+    chrome.contextMenus.create({ id: "dmt-all",      title: "Download media tabs (all windows)",           contexts: ["action"] });
+    chrome.contextMenus.create({ id: "dmt-selected", title: "Download media tabs (selected tabs)",         contexts: ["action"] });
+    chrome.contextMenus.create({ id: "dmt-left",     title: "Download media tabs to the LEFT (incl. current)",  contexts: ["action"] });
+    chrome.contextMenus.create({ id: "dmt-right",    title: "Download media tabs to the RIGHT (incl. current)", contexts: ["action"] });
+    chrome.contextMenus.create({ id: "dmt-group",    title: "Download media tabs in CURRENT TAB GROUP",         contexts: ["action"] });
     chrome.contextMenus.create({ id: "separator-1", type: "separator", contexts: ["action"] });
     chrome.contextMenus.create({ id: "open-options", title: "Options…", contexts: ["action"] });
   });
@@ -29,6 +30,8 @@ export function installContextMenuClick(runDownload) {
         await runDownload({ mode: "currentWindow" }); return;
       case "dmt-all":
         await runDownload({ mode: "allWindows" }); return;
+      case "dmt-selected":
+        await runDownload({ mode: "selectedTabs" }); return;
       case "dmt-left":
         await runDownload({ mode: "leftOfActive" }); return;
       case "dmt-right":
