@@ -344,13 +344,15 @@ function save() {
         updatePatternPreview();
         LAST_SAVED = cfg;
         updateSaveEnabled();
-        $("status").textContent = "Saved.";
-        setTimeout(() => ($("status").textContent = ""), 1500);
+        showToast("Saved.", 'success');
     });
 }
 
 function reset() {
-    chrome.storage.sync.set(DEFAULTS, load);
+    chrome.storage.sync.set(DEFAULTS, () => {
+        load();
+        showToast("Defaults restored.", 'success');
+    });
 }
 
 // Enable/disable advanced fieldsets (media types remain active always)
@@ -384,8 +386,7 @@ function exportSettings() {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        $("status").textContent = "Exported options.json.";
-        setTimeout(() => ($("status").textContent = ""), 1500);
+        showToast("Exported options.json.", 'success');
     });
 }
 
@@ -393,8 +394,7 @@ function importFromFile(file) {
     if (!file) return;
     const reader = new FileReader();
     reader.onerror = () => {
-        $("status").textContent = "Import failed (file read error).";
-        setTimeout(() => ($("status").textContent = ""), 2000);
+        showToast("Import failed (file read error).", 'error', 2000);
     };
     reader.onload = () => {
         try {
@@ -408,12 +408,10 @@ function importFromFile(file) {
             delete obj.presets;
             chrome.storage.sync.set(obj, () => {
                 load();
-                $("status").textContent = "Imported options.json.";
-                setTimeout(() => ($("status").textContent = ""), 1500);
+                showToast("Imported options.json.", 'success');
             });
         } catch (e) {
-            $("status").textContent = "Import failed (invalid JSON).";
-            setTimeout(() => ($("status").textContent = ""), 2000);
+            showToast("Import failed (invalid JSON).", 'error', 2000);
         }
     };
     reader.readAsText(file);
@@ -464,8 +462,7 @@ function loadPresetsUI() {
 function saveCurrentAsPreset() {
     const name = (($("presetName")?.value) || "").trim();
     if (!name) {
-        $("status").textContent = "Enter a preset name.";
-        setTimeout(() => ($("status").textContent = ""), 1200);
+        showToast("Enter a preset name.", 'info', 1200);
         return;
     }
     chrome.storage.sync.get({ presets: {} }, (store) => {
@@ -475,8 +472,7 @@ function saveCurrentAsPreset() {
             presets[name] = payload;
             chrome.storage.sync.set({ presets }, () => {
                 loadPresetsUI();
-                $("status").textContent = "Preset saved.";
-                setTimeout(() => ($("status").textContent = ""), 1200);
+                showToast("Preset '" + name + "' saved.", 'success', 1200);
             });
         });
     });
@@ -489,8 +485,7 @@ function applyPresetByName(name) {
         if (!preset) return;
         chrome.storage.sync.set(preset, () => {
             load();
-            $("status").textContent = "Preset applied.";
-            setTimeout(() => ($("status").textContent = ""), 1200);
+            showToast("Preset '" + name + "' applied.", 'success', 1200);
         });
     });
 }
@@ -502,10 +497,36 @@ function deletePresetByName(name) {
         delete presets[name];
         chrome.storage.sync.set({ presets }, () => {
             loadPresetsUI();
-            $("status").textContent = "Preset deleted.";
-            setTimeout(() => ($("status").textContent = ""), 1200);
+            showToast("Preset deleted.", 'success', 1200);
         });
     });
+}
+
+// ---------- Toasts ----------
+
+function showToast(message, type = 'info', duration = 1600) {
+    try{
+        const container = document.getElementById('toasts') || (()=>{
+            const c = document.createElement('div');
+            c.id = 'toasts'; c.className = 'toasts';
+            document.body.appendChild(c);
+            return c;
+        })();
+        const el = document.createElement('div');
+        el.className = `toast ${type}`;
+        el.textContent = String(message || '');
+        container.appendChild(el);
+        const hide = () => {
+            el.classList.add('hide');
+            el.addEventListener('animationend', () => {
+                el.remove();
+            }, { once:true });
+        };
+        setTimeout(hide, Math.max(600, Number(duration) || 1600));
+        return el;
+    }catch(e){
+        // Fallback: no-op
+    }
 }
 
 // ---------- Wire up ----------

@@ -261,3 +261,33 @@ select:disabled{
 
 /* Disabled groups */
 .disabled{ opacity:.6; pointer-events:none; }
+
+/* Toasts */
+.toasts{
+    position:fixed; top: 12px; left:50%; transform: translateX(-50%);
+    z-index:3000;
+    display:flex; flex-direction:column; gap:8px; align-items:center;
+    pointer-events:none; /* allow clicks to pass through gaps */
+}
+.toast{
+    pointer-events:auto;
+    border:1px solid var(--border);
+    background: var(--menu-bg);
+    color: var(--text);
+    padding:10px 12px; border-radius: var(--radius);
+    min-width: 180px; max-width: 420px;
+    animation: toast-in .16s ease-out both;
+}
+.toast.info{ border-color: var(--accent); }
+.toast.success{ border-color: var(--ctp-green); }
+.toast.error{ border-color: var(--ctp-red); }
+.toast.hide{ animation: toast-out .20s ease-in forwards; }
+
+@keyframes toast-in{
+    from{ opacity:0; transform: translateY(-8px); }
+    to{ opacity:1; transform: translateY(0); }
+}
+@keyframes toast-out{
+    from{ opacity:1; transform: translateY(0); }
+    to{ opacity:0; transform: translateY(-6px); }
+}
