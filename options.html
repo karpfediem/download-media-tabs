@@ -1,0 +1,67 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Download Media Tabs – Options</title>
+    <style>
+        body { font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 24px; }
+        fieldset { border: 1px solid #ccc; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+        legend { font-weight: 600; }
+        label { display: block; margin: 8px 0; }
+        .row { display: flex; gap: 12px; align-items: center; }
+        input[type="text"] { width: 100%; padding: 6px 8px; }
+        button { padding: 8px 12px; }
+        .note { color: #555; font-size: 12px; }
+        code { background: #f6f6f6; padding: 1px 4px; border-radius: 4px; }
+    </style>
+</head>
+<body>
+<h1>Download Media Tabs — Options</h1>
+
+<fieldset>
+    <legend>What to download</legend>
+    <label><input type="checkbox" id="includeImages"> Images (image/*)</label>
+    <label><input type="checkbox" id="includeVideo"> Video (video/*)</label>
+    <label><input type="checkbox" id="includeAudio"> Audio (audio/*)</label>
+    <label><input type="checkbox" id="includePdf"> PDF (application/pdf)</label>
+    <p class="note">Note: blob: media and some cross-origin players cannot be saved by extensions; they’re skipped.</p>
+</fieldset>
+
+<fieldset>
+    <legend>Scope & naming</legend>
+    <div class="row">
+        <label>
+            Default scope:
+            <select id="scope">
+                <option value="currentWindow">Current window</option>
+                <option value="allWindows">All windows</option>
+            </select>
+        </label>
+    </div>
+    <label>
+        Filename pattern:
+        <input id="filenamePattern" type="text" placeholder="Media Tabs/{YYYYMMDD-HHmmss}/{host}/{basename}">
+    </label>
+    <p class="note">
+        Variables: <code>{YYYYMMDD-HHmmss}</code>, <code>{host}</code>, <code>{basename}</code>. Extension is inferred if absent.
+    </p>
+</fieldset>
+
+<fieldset>
+    <legend>After download</legend>
+    <label><input type="checkbox" id="closeTabAfterDownload"> Close the tab after its file is downloaded</label>
+    <p class="note">
+        To prevent repeated “Save file” dialogs, turn off
+        <em>Ask where to save each file before downloading</em> at <code>chrome://settings/downloads</code>.
+    </p>
+</fieldset>
+
+<div class="row">
+    <button id="save">Save</button>
+    <button id="reset">Reset to defaults</button>
+    <span id="status" class="note" aria-live="polite"></span>
+</div>
+
+<script src="options.js"></script>
+</body>
+</html>
