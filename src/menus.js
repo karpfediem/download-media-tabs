@@ -1,15 +1,15 @@
-import { getSettings } from './settings.js';
+import {getSettings} from './settings.js';
 
 export function setDefaultContextMenus() {
   chrome.contextMenus.removeAll(() => {
-    chrome.contextMenus.create({ id: "dmt-current",  title: "Download media tabs (current window)",         contexts: ["action"] });
-    chrome.contextMenus.create({ id: "dmt-all",      title: "Download media tabs (all windows)",           contexts: ["action"] });
-    chrome.contextMenus.create({ id: "dmt-selected", title: "Download media tabs (selected tabs)",         contexts: ["action"] });
-    chrome.contextMenus.create({ id: "dmt-left",     title: "Download media tabs to the LEFT (incl. current)",  contexts: ["action"] });
-    chrome.contextMenus.create({ id: "dmt-right",    title: "Download media tabs to the RIGHT (incl. current)", contexts: ["action"] });
-    chrome.contextMenus.create({ id: "dmt-group",    title: "Download media tabs in CURRENT TAB GROUP",         contexts: ["action"] });
-    chrome.contextMenus.create({ id: "separator-1", type: "separator", contexts: ["action"] });
-    chrome.contextMenus.create({ id: "open-options", title: "Options…", contexts: ["action"] });
+      chrome.contextMenus.create({ id: "dmt-selected", title: "Download selected tabs", contexts: ["action"] });
+      chrome.contextMenus.create({ id: "dmt-current", title: "Download current window", contexts: ["action"] });
+      chrome.contextMenus.create({ id: "dmt-all", title: "Download all windows", contexts: ["action"] });
+      chrome.contextMenus.create({ id: "dmt-group", title: "Download current tab group", contexts: ["action"] });
+      chrome.contextMenus.create({ id: "dmt-left", title: "Download to the left (including current tab)", contexts: ["action"] });
+      chrome.contextMenus.create({ id: "dmt-right", title: "Download to the right (including current tab)", contexts: ["action"] });
+      chrome.contextMenus.create({ id: "separator-1", type: "separator", contexts: ["action"] });
+      chrome.contextMenus.create({ id: "open-options", title: "Options…", contexts: ["action"] });
   });
 }
 
