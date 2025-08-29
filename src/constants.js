@@ -12,6 +12,8 @@ export const DEFAULT_SETTINGS = {
   coverageThreshold: 0.5,
   probeConcurrency: 8,
   downloadConcurrency: 6,
+  // New behavior: when enabled, auto-run on each new tab as it finishes loading
+  autoRunOnNewTabs: false,
   filtersEnabled: false,
   filters: {
     minWidth: 0,

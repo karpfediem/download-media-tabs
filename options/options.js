@@ -10,6 +10,8 @@ const DEFAULTS = {
     scope: "currentWindow",
     filenamePattern: "Media Tabs/{YYYYMMDD-HHmmss}/{host}/{basename}",
     theme: "system",
+    // Automation
+    autoRunOnNewTabs: false,
 
     // Detection
     strictSingleDetection: true,
@@ -153,6 +155,9 @@ function sanitizeSettingsInput(input) {
     sanitized.strictSingleDetection = cfg.strictSingleDetection !== false;
     sanitized.coverageThreshold = clampFloat(cfg.coverageThreshold, 0, 1, DEFAULTS.coverageThreshold);
 
+    // Automation
+    sanitized.autoRunOnNewTabs = !!cfg.autoRunOnNewTabs;
+
     // Performance
     sanitized.probeConcurrency = clampInt(cfg.probeConcurrency, 1, 32, DEFAULTS.probeConcurrency);
     sanitized.downloadConcurrency = clampInt(cfg.downloadConcurrency, 1, 32, DEFAULTS.downloadConcurrency);
@@ -280,6 +285,9 @@ function load() {
         $("strictSingleDetection").checked = safeCfg.strictSingleDetection !== false;
         $("coverageThreshold").value = clampFloat(safeCfg.coverageThreshold, 0, 1, DEFAULTS.coverageThreshold);
 
+        // Automation
+        $("autoRunOnNewTabs").checked = !!safeCfg.autoRunOnNewTabs;
+
         // Performance
         $("probeConcurrency").value    = clampInt(safeCfg.probeConcurrency, 1, 32, DEFAULTS.probeConcurrency);
         $("downloadConcurrency").value = clampInt(safeCfg.downloadConcurrency, 1, 32, DEFAULTS.downloadConcurrency);
@@ -351,6 +359,9 @@ function buildConfigFromUI() {
         // Performance
         probeConcurrency: clampInt($("probeConcurrency").value, 1, 32, DEFAULTS.probeConcurrency),
         downloadConcurrency: clampInt($("downloadConcurrency").value, 1, 32, DEFAULTS.downloadConcurrency),
+
+        // Automation
+        autoRunOnNewTabs: $("autoRunOnNewTabs").checked,
 
         // After
         closeTabAfterDownload: $("closeTabAfterDownload").checked,
@@ -453,6 +464,7 @@ function pickSettingsOnly(obj) {
         'includeImages','includeVideo','includeAudio','includePdf',
         'strictSingleDetection','coverageThreshold',
         'probeConcurrency','downloadConcurrency',
+        'autoRunOnNewTabs',
         'closeTabAfterDownload','keepWindowOpenOnLastTabClose',
         'filtersEnabled','filters'
     ];
