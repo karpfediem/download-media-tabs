@@ -5,7 +5,7 @@ export const DEFAULT_SETTINGS = {
   includeAudio: true,
   includePdf: true,
   scope: "currentWindow",
-  filenamePattern: "Media Tabs/{YYYYMMDD-HHmmss}/{host}/{basename}",
+  filenamePattern: "Media Tabs/{host}/{basename}",
   closeTabAfterDownload: false,
   keepWindowOpenOnLastTabClose: false,
   strictSingleDetection: true,

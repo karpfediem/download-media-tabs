@@ -8,7 +8,7 @@ const DEFAULTS = {
     includeAudio: true,
     includePdf: true,
     scope: "currentWindow",
-    filenamePattern: "Media Tabs/{YYYYMMDD-HHmmss}/{host}/{basename}",
+    filenamePattern: "Media Tabs/{host}/{basename}",
     theme: "system",
     // Automation
     autoRunOnNewTabs: false,
