@@ -13,6 +13,9 @@ const DEFAULTS = {
     // Automation
     autoRunOnNewTabs: false,
 
+    // Permissions (whitelist of sites; Chrome match patterns)
+    allowedOrigins: [],
+
     // Detection
     strictSingleDetection: true,
     coverageThreshold: 0.5,
@@ -137,6 +140,17 @@ function safeMergeFilters(base, incoming) {
     return out;
 }
 
+function isValidMatchPattern(p) {
+    const s = String(p || '').trim();
+    if (!s) return false;
+    // Rough validation for Chrome match patterns; Chrome will do final validation when requesting permissions.
+    const re = /^(\*|http|https|ftp):\/\/(\*|\*\.[^\/\*]+|[^\/\*]+)\/.*$/i;
+    return re.test(s);
+}
+function normalizeMatchPatterns(lines) {
+    return lines.map(String).map(s => s.trim()).filter(Boolean).filter(isValidMatchPattern);
+}
+
 function sanitizeSettingsInput(input) {
     const cfg = (typeof input === 'object' && input) ? input : {};
     const sanitized = {};
@@ -157,6 +171,9 @@ function sanitizeSettingsInput(input) {
 
     // Automation
     sanitized.autoRunOnNewTabs = !!cfg.autoRunOnNewTabs;
+
+    // Permissions
+    sanitized.allowedOrigins = Array.isArray(cfg.allowedOrigins) ? normalizeMatchPatterns(cfg.allowedOrigins) : [];
 
     // Performance
     sanitized.probeConcurrency = clampInt(cfg.probeConcurrency, 1, 32, DEFAULTS.probeConcurrency);
@@ -270,6 +287,8 @@ function load() {
         // General
         $("scope").value           = safeCfg.scope || DEFAULTS.scope;
         $("filenamePattern").value = safeCfg.filenamePattern || DEFAULTS.filenamePattern;
+        // Permissions UI
+        $("allowedOrigins").value  = (Array.isArray(safeCfg.allowedOrigins) ? safeCfg.allowedOrigins : []).join("\n");
         // Theme
         const theme = safeCfg.theme || DEFAULTS.theme;
         $("theme").value = theme;
@@ -345,6 +364,9 @@ function buildConfigFromUI() {
         scope: $("scope").value,
         filenamePattern: $("filenamePattern").value.trim() || DEFAULTS.filenamePattern,
         theme: $("theme").value || DEFAULTS.theme,
+
+        // Permissions
+        allowedOrigins: normalizeMatchPatterns(linesToArray($("allowedOrigins").value, { trim: true, lower: false })), 
 
         // Media types (always applied)
         includeImages: $("includeImages").checked,
@@ -460,7 +482,7 @@ function reflectFiltersEnabledState() {
 function pickSettingsOnly(obj) {
     const cfg = (typeof obj === 'object' && obj) ? obj : {};
     const allowedTop = [
-        'scope','filenamePattern','theme',
+        'scope','filenamePattern','theme','allowedOrigins',
         'includeImages','includeVideo','includeAudio','includePdf',
         'strictSingleDetection','coverageThreshold',
         'probeConcurrency','downloadConcurrency',
@@ -676,6 +698,15 @@ document.addEventListener("DOMContentLoaded", () => {
         if (id === "exportSettings") exportSettings();
         if (id === "importSettings") $("importFile").click();
         if (id === "savePreset") saveCurrentAsPreset();
+        if (id === "requestHostPerms") {
+            // Request optional host permissions for the current whitelist
+            const patterns = normalizeMatchPatterns(linesToArray($("allowedOrigins").value, { trim: true, lower: false }));
+            if (!patterns.length) { showToast("No sites listed.", 'info'); return; }
+            chrome.permissions.request({ origins: patterns }, (granted) => {
+                showToast(granted ? "Permissions granted." : "Some or all permissions were denied.", granted ? 'success' : 'warn', 2200);
+            });
+            return;
+        }
         if (t.dataset?.action === 'applyPreset') applyPresetByName(t.dataset.name);
         if (t.dataset?.action === 'deletePreset') deletePresetByName(t.dataset.name);
     });

@@ -77,6 +77,17 @@
                 </fieldset>
 
                 <fieldset>
+                    <legend>Allowed sites (permissions)</legend>
+                    <label>Sites this extension can access (one Chrome match pattern per line)
+                        <textarea id="allowedOrigins" placeholder="https://example.com/*&#10;*://*.example.org/*"></textarea>
+                    </label>
+                    <p class="note">Use Chrome match patterns (e.g., https://example.com/*, *://*.example.org/*). The extension will request access to these sites at runtime only. You can change this list anytime.</p>
+                    <div class="row">
+                        <button id="requestHostPerms" type="button">Request permissions now</button>
+                    </div>
+                </fieldset>
+
+                <fieldset>
                     <legend>Filters</legend>
 
                     <label class="inline">

@@ -68,8 +68,24 @@ async function startDownloadWithBookkeeping(p, settings, batchDate, hasSizeRule,
   return downloadId;
 }
 
+async function ensureHostPermissionsFromWhitelist(settings) {
+  try {
+    const patterns = Array.isArray(settings.allowedOrigins) ? settings.allowedOrigins.filter(Boolean) : [];
+    if (!patterns.length) return false;
+    // Request all at once; Chrome will only prompt for ones not yet granted.
+    return await new Promise((resolve) => {
+      chrome.permissions.request({ origins: patterns }, (granted) => resolve(!!granted));
+    });
+  } catch {
+    return false;
+  }
+}
+
 export async function runDownload({ mode }) {
   const settings = await getSettings();
+
+  // Attempt to acquire optional host permissions as per user whitelist
+  try { await ensureHostPermissionsFromWhitelist(settings); } catch {}
 
   const allTabs = await selectCandidateTabs(mode || "currentWindow");
 
@@ -166,6 +182,9 @@ export async function runDownload({ mode }) {
 // Run for a single tab (used by auto-run on new tabs)
 export async function runDownloadForTab(tabOrId) {
   const settings = await getSettings();
+
+  // Attempt to acquire optional host permissions as per user whitelist (autorun path)
+  try { await ensureHostPermissionsFromWhitelist(settings); } catch {}
   let tab = tabOrId;
   if (typeof tabOrId === 'number') {
     try { tab = await chrome.tabs.get(tabOrId); } catch { return; }
