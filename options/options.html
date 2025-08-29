@@ -27,7 +27,7 @@
         <!-- Tab headers -->
         <div class="tablist" role="tablist" aria-label="Settings tabs">
             <button class="tabbtn" role="tab" id="tab-general"     aria-controls="panel-general"     aria-selected="true"  tabindex="0">General</button>
-            <button class="tabbtn" role="tab" id="tab-after"       aria-controls="panel-after"       aria-selected="false" tabindex="-1">After download</button>
+            <button class="tabbtn" role="tab" id="tab-automation" aria-controls="panel-automation" aria-selected="false" tabindex="-1">Automation</button>
             <button class="tabbtn" role="tab" id="tab-detection"   aria-controls="panel-detection"   aria-selected="false" tabindex="-1">Detection</button>
             <button class="tabbtn" role="tab" id="tab-performance" aria-controls="panel-performance" aria-selected="false" tabindex="-1">Performance</button>
             <button class="tabbtn" role="tab" id="tab-theme"       aria-controls="panel-theme"       aria-selected="false" tabindex="-1">Theme</button>
@@ -69,13 +69,6 @@
                         Extension inferred when absent.
                     </p>
                 </fieldset>
-
-                <fieldset>
-                    <legend>Automation</legend>
-                    <label class="inline"><input type="checkbox" id="autoRunOnNewTabs"> Automatically run on each new tab (download single-media tabs as they load)</label>
-                    <p class="note">When enabled, as a new tab finishes loading, the extension will try to download it if it’s a direct single-media page. Respects all filters and post-actions.</p>
-                </fieldset>
-
 
                 <fieldset>
                     <legend>Filters</legend>
@@ -206,8 +199,13 @@
                 </fieldset>
             </section>
 
-            <!-- After download -->
-            <section class="panel" id="panel-after" role="tabpanel" aria-labelledby="tab-after" hidden>
+            <!-- Automation -->
+            <section class="panel" id="panel-automation" role="tabpanel" aria-labelledby="tab-automation" hidden>
+                <fieldset>
+                    <legend>Auto-run</legend>
+                    <label class="inline"><input type="checkbox" id="autoRunOnNewTabs"> Auto-download on new tabs (download single-media tabs as they load)</label>
+                    <p class="note">When enabled, as a new tab finishes loading, the extension will try to download it if it’s a direct single-media page. Respects all filters and post-actions.</p>
+                </fieldset>
                 <fieldset>
                     <legend>Post actions</legend>
                     <label><input type="checkbox" id="closeTabAfterDownload"> Close the tab after its file is downloaded</label>

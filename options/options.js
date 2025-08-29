@@ -153,7 +153,7 @@ function sanitizeSettingsInput(input) {
 
 // ---------- Tabs (accessible) ----------
 
-const tabIds = ["general", "after", "detection", "performance", "theme", "presets", "about"];
+const tabIds = ["general", "automation", "detection", "performance", "theme", "presets", "about"];
 function initTabs() {
     const tabs = tabIds.map(id => ({
         tab: $(`tab-${id}`),
