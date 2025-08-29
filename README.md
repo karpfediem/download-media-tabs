@@ -29,7 +29,7 @@ No build step is required; it’s plain JavaScript/HTML/CSS.
 The extension needs access to tabs and to download files. All logic runs locally in your browser; it does not contact external services.
 
 ## Contributing
-Issues and pull requests are welcome. Please keep changes focused and small. If adding a new option, include a brief note in the options UI to explain it.
+Issues and pull requests are welcome. Please keep changes focused and small, but i'm open to discuss feature requests.
 
 ## Notes
 - Tested on recent Chromium/Chrome versions.
