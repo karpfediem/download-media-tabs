@@ -25,16 +25,6 @@ No build step is required; it’s plain JavaScript/HTML/CSS.
 
 **Warning:** For silent bulk downloads, disable "Ask where to save each file before downloading" at `chrome://settings/downloads`. Otherwise Chrome will show a Save dialog for every file.
 
-## Project structure
-- `manifest.json` — Extension manifest (permissions, actions)
-- `src/` — Core logic
-  - `background.js` — Orchestrates discovery and downloads
-  - `downloadOrchestrator.js`, `decide.js`, `probe.js`, `filters.js` — Detection/filtering pipeline
-  - `menus.js` — Context menu wiring
-  - `settings.js` — Storage helpers
-- `options/` — Options UI (HTML/CSS/JS)
-- `icons/` — Extension icons
-
 ## Permissions
 The extension needs access to tabs and to download files. All logic runs locally in your browser; it does not contact external services.
 
