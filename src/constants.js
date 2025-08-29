@@ -6,6 +6,7 @@ export const DEFAULT_SETTINGS = {
   includePdf: true,
   scope: "currentWindow",
   filenamePattern: "Media Tabs/{host}/{basename}",
+  theme: "system",
   closeTabAfterDownload: false,
   keepWindowOpenOnLastTabClose: false,
   strictSingleDetection: true,

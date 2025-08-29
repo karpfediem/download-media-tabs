@@ -1,65 +1,7 @@
 // Options UI logic with tabbed navigation and unified Filters.
-// Saves everything to chrome.storage.sync using a DEFAULTS object.
+// Saves everything to chrome.storage.sync using DEFAULTS that come from shared src/constants.js.
 
-const DEFAULTS = {
-    // General
-    includeImages: true,
-    includeVideo: true,
-    includeAudio: true,
-    includePdf: true,
-    scope: "currentWindow",
-    filenamePattern: "Media Tabs/{host}/{basename}",
-    theme: "system",
-    // Automation
-    autoRunOnNewTabs: false,
-
-    // Permissions (whitelist of sites; Chrome match patterns)
-    allowedOrigins: [],
-
-    // Detection
-    strictSingleDetection: true,
-    coverageThreshold: 0.5,
-
-    // Performance
-    probeConcurrency: 8,
-    downloadConcurrency: 6,
-
-    // After download
-    closeTabAfterDownload: false,
-    keepWindowOpenOnLastTabClose: false,
-
-    // Filters
-    filtersEnabled: false,  // Advanced filters toggle (media type is always applied)
-    filters: {
-        // Dimensions (images only). 0 means “no limit”.
-        minWidth: 0,
-        minHeight: 0,
-        maxWidth: 0,
-        maxHeight: 0,
-        minMegapixels: 0,  // e.g., 2.0 for 2MP
-        maxMegapixels: 0,
-
-        // File size in bytes. 0 means “no limit”.
-        minBytes: 0,
-        maxBytes: 0,
-
-        // Domain lists
-        allowedDomains: [],
-        blockedDomains: [],
-
-        // Extensions (lowercase, no dots)
-        allowedExtensions: [],
-        blockedExtensions: [],
-
-        // MIME patterns (lowercase; supports wildcards like image/*)
-        allowedMime: [],
-        blockedMime: [],
-
-        // URL substring includes/excludes
-        includeUrlSubstrings: [],
-        excludeUrlSubstrings: []
-    }
-};
+import { DEFAULT_SETTINGS as DEFAULTS } from "../src/constants.js";
 
 // ---------- Utilities ----------
 
