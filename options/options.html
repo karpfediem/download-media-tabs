@@ -76,20 +76,6 @@
                     <p class="note">When enabled, as a new tab finishes loading, the extension will try to download it if it’s a direct single-media page. Respects all filters and post-actions.</p>
                 </fieldset>
 
-                <fieldset>
-                    <legend>Allow pre-fetching sites (optional)</legend>
-                    <p class="note">Optional. Leaving this empty is fine, and downloads still work. If pre-checks aren’t allowed, size/type rules may be enforced after download.</p>
-                    <label>Sites to allow for pre-checks (one Chrome match pattern per line)
-                        <textarea id="allowedOrigins" placeholder="https://example.com/*&#10;*://*.example.org/*"></textarea>
-                    </label>
-                    <p class="note">
-                        Why add sites: some hosts block cross-origin header reads. Granting access here lets the extension read Content-Length/Type before download and skip files that won’t meet your filters. Many CDNs already work without this. Add entries if you see CORS/pre-check failures or unknown size.
-                    </p>
-                    <p class="note">Use Chrome match patterns (e.g., https://example.com/*, *://*.example.org/*). Access is requested at runtime only for listed sites. All sites: *://*/*</p>
-                    <div class="row">
-                        <button id="requestHostPerms" type="button">Request permissions now</button>
-                    </div>
-                </fieldset>
 
                 <fieldset>
                     <legend>Filters</legend>
@@ -263,6 +249,21 @@
                         </label>
                     </div>
                     <p class="note">Higher values finish faster but can increase CPU/network load.</p>
+                </fieldset>
+
+                <fieldset>
+                    <legend>Allow pre-fetching sites (optional)</legend>
+                    <p class="note">Optional. Leaving this empty is fine, and downloads still work. If pre-checks aren’t allowed, size/type rules may be enforced after download.</p>
+                    <label>Sites to allow for pre-checks (one Chrome match pattern per line)
+                        <textarea id="allowedOrigins" placeholder="https://example.com/*&#10;*://*.example.org/*"></textarea>
+                    </label>
+                    <p class="note">
+                        Why add sites: some hosts block cross-origin header reads. Granting access here lets the extension read Content-Length/Type before download and skip files that won’t meet your filters. Many CDNs already work without this. Add entries if you see CORS/pre-check failures or unknown size.
+                    </p>
+                    <p class="note">Use Chrome match patterns (e.g., https://example.com/*, *://*.example.org/*). Access is requested at runtime only for listed sites. All sites: *://*/*</p>
+                    <div class="row">
+                        <button id="requestHostPerms" type="button">Request permissions now</button>
+                    </div>
                 </fieldset>
             </section>
 
