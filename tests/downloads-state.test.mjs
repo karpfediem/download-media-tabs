@@ -1,18 +1,15 @@
 import assert from "node:assert/strict";
+import { createStorageFixture, createDownloadsStub, createTabsStub, createChromeBase, ref } from "./helpers/chrome-stubs.mjs";
 
-let onChangedListener = null;
+const onChangedListener = ref(null);
 const tabsById = new Map();
 const removedTabs = [];
 const cancelCalls = [];
 const removeFileCalls = [];
 const eraseCalls = [];
 const searchResults = new Map();
-
-const storage = {
-  sync: {},
-  local: {},
-  session: {}
-};
+const storageFixture = createStorageFixture();
+const storage = storageFixture.storage;
 
 function resetState(downloadsState) {
   tabsById.clear();
@@ -28,64 +25,21 @@ function resetState(downloadsState) {
   downloadsState.pendingSizeConstraints.clear();
 }
 
-function getFromStore(area, defaults) {
-  const base = (defaults && typeof defaults === "object") ? defaults : {};
-  const data = storage[area] || {};
-  return { ...base, ...data };
-}
-
-globalThis.chrome = {
-  storage: {
-    sync: {
-      get: (defaults, cb) => {
-        const data = getFromStore("sync", defaults);
-        if (typeof cb === "function") return cb(data);
-        return Promise.resolve(data);
-      },
-      set: async (obj) => {
-        storage.sync = { ...(storage.sync || {}), ...(obj || {}) };
-      }
-    },
-    local: {
-      get: async (defaults) => getFromStore("local", defaults),
-      set: async (obj) => { storage.local = { ...(storage.local || {}), ...(obj || {}) }; }
-    },
-    session: {
-      get: async (defaults) => getFromStore("session", defaults),
-      set: async (obj) => { storage.session = { ...(storage.session || {}), ...(obj || {}) }; }
-    }
-  },
-  downloads: {
-    onChanged: {
-      addListener: (fn) => {
-        onChangedListener = fn;
-        globalThis.__dmtOnChangedListener = fn;
-      }
-    },
-    search: async ({ id }) => searchResults.get(id) || [],
-    cancel: async (id) => { cancelCalls.push(id); },
-    removeFile: async (id) => { removeFileCalls.push(id); },
-    erase: async (obj) => { eraseCalls.push(obj); }
-  },
-  tabs: {
-    get: async (tabId) => tabsById.get(tabId) || null,
-    remove: (tabId, cb) => {
-      removedTabs.push(tabId);
-      if (typeof cb === "function") cb();
-    },
-    query: async () => [],
-    create: async () => ({ id: 999, url: "chrome://newtab/", windowId: 1 })
-  },
-  runtime: {
-    lastError: null
-  },
-  permissions: {
-    contains: (_query, cb) => cb(false)
-  },
-  extension: {
-    isAllowedFileSchemeAccess: (cb) => cb(false)
+const downloads = createDownloadsStub({
+  onChangedListenerRef: onChangedListener,
+  searchResults,
+  cancelCalls,
+  removeFileCalls,
+  eraseCalls
+});
+const tabs = createTabsStub({
+  get: async (tabId) => tabsById.get(tabId) || null,
+  remove: (tabId, cb) => {
+    removedTabs.push(tabId);
+    if (typeof cb === "function") cb();
   }
-};
+});
+globalThis.chrome = createChromeBase({ storageFixture, downloads, tabs });
 
 const downloadsState = await import("../src/downloadsState.js");
 const { setDownloadTabMapping, setPendingSizeConstraint } = downloadsState;
@@ -100,7 +54,7 @@ const { upsertTask, updateTask, getTasks } = tasksState;
   await setDownloadTabMapping(1, 1, "https://example.com/a.jpg", "https://example.com/a.jpg", false);
   await setPendingSizeConstraint(1, { minBytes: 0, maxBytes: 1000 });
 
-  const listener = onChangedListener || globalThis.__dmtOnChangedListener;
+  const listener = onChangedListener.current || globalThis.__dmtOnChangedListener;
   await listener({ id: 1, state: { current: "interrupted" } });
 
   const tasks = await getTasks();
@@ -119,7 +73,7 @@ const { upsertTask, updateTask, getTasks } = tasksState;
   tabsById.set(2, tab);
   await setDownloadTabMapping(2, 2, tab.url, tab.url, true);
 
-  const listener = onChangedListener || globalThis.__dmtOnChangedListener;
+  const listener = onChangedListener.current || globalThis.__dmtOnChangedListener;
   await listener({ id: 2, state: { current: "in_progress" } });
 
   assert.deepEqual(removedTabs, [2]);
@@ -134,7 +88,7 @@ const { upsertTask, updateTask, getTasks } = tasksState;
   tabsById.set(3, tab);
   await setDownloadTabMapping(3, 3, "https://example.com/file.jpg", "https://example.com/file.jpg", true);
 
-  const listener = onChangedListener || globalThis.__dmtOnChangedListener;
+  const listener = onChangedListener.current || globalThis.__dmtOnChangedListener;
   await listener({ id: 3, state: { current: "in_progress" } });
 
   assert.deepEqual(removedTabs, []);
@@ -151,7 +105,7 @@ const { upsertTask, updateTask, getTasks } = tasksState;
   await updateTask(task.id, { downloadId: 4, status: "started" });
   await setDownloadTabMapping(4, 4, tab.url, tab.url, false);
 
-  const listener = onChangedListener || globalThis.__dmtOnChangedListener;
+  const listener = onChangedListener.current || globalThis.__dmtOnChangedListener;
   await listener({ id: 4, state: { current: "complete" } });
 
   const tasks = await getTasks();
@@ -168,7 +122,7 @@ const { upsertTask, updateTask, getTasks } = tasksState;
   await setPendingSizeConstraint(5, { minBytes: 0, maxBytes: 100 });
   await setDownloadTabMapping(5, 5, "https://example.com/big.jpg", "https://example.com/big.jpg", false);
 
-  const listener = onChangedListener || globalThis.__dmtOnChangedListener;
+  const listener = onChangedListener.current || globalThis.__dmtOnChangedListener;
   await listener({ id: 5, bytesReceived: { current: 101 } });
 
   const tasks = await getTasks();

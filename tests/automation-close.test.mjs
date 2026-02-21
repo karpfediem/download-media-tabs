@@ -1,26 +1,25 @@
 import assert from "node:assert/strict";
+import { createStorageFixture, createDownloadsStub, createTabsStub, createChromeBase, ref } from "./helpers/chrome-stubs.mjs";
 
-let onChangedListener = null;
+const onChangedListener = ref(null);
 let currentTabs = [];
 const tabsById = new Map();
 const removedTabs = [];
 const downloadCalls = [];
-let nextDownloadId = 1;
+const nextDownloadId = ref(1);
+const searchResults = new Map();
 let downloadIdToMeta = null;
 let pendingSizeConstraints = null;
-
-const storage = {
-  sync: {},
-  local: {},
-  session: {}
-};
+const storageFixture = createStorageFixture();
+const storage = storageFixture.storage;
 
 function resetState() {
   currentTabs = [];
   tabsById.clear();
   removedTabs.length = 0;
   downloadCalls.length = 0;
-  nextDownloadId = 1;
+  searchResults.clear();
+  nextDownloadId.current = 1;
   storage.sync = {};
   storage.local = {};
   storage.session = {};
@@ -28,71 +27,21 @@ function resetState() {
   if (pendingSizeConstraints) pendingSizeConstraints.clear();
 }
 
-function getFromStore(area, defaults) {
-  const base = (defaults && typeof defaults === "object") ? defaults : {};
-  const data = storage[area] || {};
-  return { ...base, ...data };
-}
-
-globalThis.chrome = {
-  storage: {
-    sync: {
-      get: (defaults, cb) => {
-        const data = getFromStore("sync", defaults);
-        if (typeof cb === "function") return cb(data);
-        return Promise.resolve(data);
-      },
-      set: async (obj) => {
-        storage.sync = { ...(storage.sync || {}), ...(obj || {}) };
-      }
-    },
-    local: {
-      get: async (defaults) => getFromStore("local", defaults),
-      set: async (obj) => { storage.local = { ...(storage.local || {}), ...(obj || {}) }; }
-    },
-    session: {
-      get: async (defaults) => getFromStore("session", defaults),
-      set: async (obj) => { storage.session = { ...(storage.session || {}), ...(obj || {}) }; }
-    }
+const downloads = createDownloadsStub({
+  onChangedListenerRef: onChangedListener,
+  downloadCalls,
+  nextDownloadIdRef: nextDownloadId,
+  searchResults
+});
+const tabs = createTabsStub({
+  get: async (tabId) => tabsById.get(tabId) || null,
+  remove: (tabId, cb) => {
+    removedTabs.push(tabId);
+    if (typeof cb === "function") cb();
   },
-  downloads: {
-    onChanged: {
-      addListener: (fn) => {
-        onChangedListener = fn;
-        globalThis.__dmtOnChangedListener = fn;
-      }
-    },
-    download: async (opts) => {
-      downloadCalls.push(opts);
-      return nextDownloadId++;
-    },
-    search: async ({ id }) => [{ id, fileSize: 1024, bytesReceived: 1024 }],
-    cancel: async () => {},
-    removeFile: async () => {},
-    erase: async () => {}
-  },
-  tabs: {
-    get: async (tabId) => tabsById.get(tabId) || null,
-    remove: (tabId, cb) => {
-      removedTabs.push(tabId);
-      if (typeof cb === "function") cb();
-    },
-    query: async () => currentTabs,
-    create: async () => ({ id: 999, url: "chrome://newtab/", windowId: 1 })
-  },
-  permissions: {
-    contains: (_query, cb) => cb(false)
-  },
-  runtime: {
-    lastError: null
-  },
-  scripting: {
-    executeScript: async () => [{ result: null }]
-  },
-  extension: {
-    isAllowedFileSchemeAccess: (cb) => cb(false)
-  }
-};
+  query: async () => currentTabs
+});
+globalThis.chrome = createChromeBase({ storageFixture, downloads, tabs });
 
 const downloadsState = await import("../src/downloadsState.js");
 const { setDownloadTabMapping, setPendingSizeConstraint } = downloadsState;
@@ -110,7 +59,7 @@ const { runDownload } = await import("../src/downloadOrchestrator.js");
   const tab = { id: 1, url: tabUrl, windowId: 1 };
   tabsById.set(1, tab);
   await setDownloadTabMapping(10, 1, tabUrl, downloadUrl, true);
-  const listener = onChangedListener || globalThis.__dmtOnChangedListener;
+  const listener = onChangedListener.current || globalThis.__dmtOnChangedListener;
   await listener({ id: 10, state: { current: "in_progress" } });
   assert.deepEqual(removedTabs, [1]);
 }
@@ -143,10 +92,12 @@ const { runDownload } = await import("../src/downloadOrchestrator.js");
   const task = await upsertTask({ tabId: 1, url: "https://example.com/file.jpg", kind: "manual" });
   await updateTask(task.id, { downloadId: 42, status: "started" });
   await setPendingSizeConstraint(42, { minBytes: 0, maxBytes: 100 });
+  searchResults.set(42, [{ id: 42, fileSize: 1024, bytesReceived: 1024 }]);
   const before = await getTasks();
   assert.equal(before.length, 1);
 
-  await onChangedListener({ id: 42, state: { current: "complete" } });
+  const listener = onChangedListener.current || globalThis.__dmtOnChangedListener;
+  await listener({ id: 42, state: { current: "complete" } });
 
   const after = await getTasks();
   assert.equal(after.length, 0);

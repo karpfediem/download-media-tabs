@@ -1,22 +1,13 @@
 import assert from "node:assert/strict";
 import { runDownload } from "../src/downloadOrchestrator.js";
 import { DEFAULT_SETTINGS } from "../src/constants.js";
+import { createStorageFixture, createDownloadsStub, createTabsStub, createChromeBase, ref } from "./helpers/chrome-stubs.mjs";
 
 const downloadCalls = [];
-let nextDownloadId = 1;
-let onChangedListener = null;
-
-const storage = {
-  sync: {},
-  local: {},
-  session: {}
-};
-
-function getFromStore(area, defaults) {
-  const base = (defaults && typeof defaults === "object") ? defaults : {};
-  const data = storage[area] || {};
-  return { ...base, ...data };
-}
+const nextDownloadId = ref(1);
+const onChangedListener = ref(null);
+const storageFixture = createStorageFixture();
+const storage = storageFixture.storage;
 
 globalThis.fetch = async (url) => {
   const isSmall = String(url).includes("small");
@@ -40,55 +31,16 @@ const tabs = [
   { id: 4, url: "https://example.com/small.jpg", windowId: 1 }
 ];
 
-globalThis.chrome = {
-  storage: {
-    sync: {
-      get: (defaults, cb) => {
-        const data = getFromStore("sync", defaults);
-        if (typeof cb === "function") return cb(data);
-        return Promise.resolve(data);
-      },
-      set: async (obj) => { storage.sync = { ...(storage.sync || {}), ...(obj || {}) }; }
-    },
-    local: {
-      get: async (defaults) => getFromStore("local", defaults),
-      set: async (obj) => { storage.local = { ...(storage.local || {}), ...(obj || {}) }; }
-    },
-    session: {
-      get: async (defaults) => getFromStore("session", defaults),
-      set: async (obj) => { storage.session = { ...(storage.session || {}), ...(obj || {}) }; }
-    }
-  },
-  downloads: {
-    onChanged: { addListener: (fn) => { onChangedListener = fn; } },
-    download: async (opts) => {
-      downloadCalls.push(opts);
-      return nextDownloadId++;
-    },
-    search: async () => [],
-    cancel: async () => {},
-    removeFile: async () => {},
-    erase: async () => {}
-  },
-  tabs: {
-    query: async () => tabs,
-    get: async (tabId) => tabs.find(t => t.id === tabId) || null,
-    remove: (_tabId, cb) => { if (typeof cb === "function") cb(); },
-    create: async () => ({ id: 999, url: "chrome://newtab/", windowId: 1 })
-  },
-  permissions: {
-    contains: (_query, cb) => cb(false)
-  },
-  runtime: {
-    lastError: null
-  },
-  scripting: {
-    executeScript: async () => [{ result: null }]
-  },
-  extension: {
-    isAllowedFileSchemeAccess: (cb) => cb(false)
-  }
-};
+const downloads = createDownloadsStub({
+  onChangedListenerRef: onChangedListener,
+  downloadCalls,
+  nextDownloadIdRef: nextDownloadId
+});
+const tabsApi = createTabsStub({
+  query: async () => tabs,
+  get: async (tabId) => tabs.find(t => t.id === tabId) || null
+});
+globalThis.chrome = createChromeBase({ storageFixture, downloads, tabs: tabsApi });
 
 storage.sync = {
   ...DEFAULT_SETTINGS,
