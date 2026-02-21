@@ -1,55 +1,15 @@
 import { getSettings } from './settings.js';
 import { pLimit } from './concurrency.js';
 import { selectCandidateTabs } from './selection.js';
-import { buildFilename, hostFromUrl, lastPathSegment, extFromUrl } from './urlUtils.js';
-import { DEFAULT_SETTINGS, MEDIA_EXTENSIONS, isMimeIncluded } from './constants.js';
-import { applyPreFilters } from './filters.js';
+import { buildFilename, lastPathSegment } from './urlUtils.js';
+import { DEFAULT_SETTINGS } from './constants.js';
 import { sizeWithin, headContentLength } from './headSize.js';
 import { decideTab } from './decide.js';
 import { setDownloadTabMapping, setPendingSizeConstraint } from './downloadsState.js';
 import { upsertTask, updateTask, getTaskById, removeTask } from './tasksState.js';
 import { isFileSchemeAllowed } from './fileAccess.js';
-
-// Internal helpers to reduce duplication and keep behavior consistent
-function planFromDecision(decision, settings, tabId) {
-  if (!decision || !decision.shouldDownload || !decision.downloadUrl) return null;
-  const ext = (decision.suggestedExt || extFromUrl(decision.downloadUrl) || 'bin').toLowerCase();
-  const host = hostFromUrl(decision.downloadUrl);
-  const mime = (decision.mimeFromProbe && String(decision.mimeFromProbe).toLowerCase()) ||
-    MEDIA_EXTENSIONS.get(ext) || '';
-
-  if (!decision.bypassFilters && !decision.triggered) {
-    if (!isMimeIncluded(mime || (MEDIA_EXTENSIONS.get(ext) || ''), settings)) return null;
-  }
-
-  const filtersOn = !!settings.filtersEnabled;
-  const f = Object.assign({}, DEFAULT_SETTINGS.filters, settings.filters || {});
-
-  if (filtersOn && !decision.bypassFilters) {
-    const preVerdict = applyPreFilters({
-      url: decision.downloadUrl,
-      host,
-      ext,
-      mime,
-      width: decision.imageWidth,
-      height: decision.imageHeight
-    }, f);
-    if (!preVerdict.pass) return null;
-  }
-
-  return {
-    tabId,
-    url: decision.downloadUrl,
-    host,
-    ext,
-    mime,
-    bypassFilters: !!decision.bypassFilters,
-    triggered: !!decision.triggered,
-    baseName: decision.baseName,
-    width: decision.imageWidth,
-    height: decision.imageHeight
-  };
-}
+import { planFromDecision } from './plan.js';
+import { markDuplicatesByUrl } from './taskUtils.js';
 
 async function startDownloadWithBookkeeping(p, settings, batchDate, hasSizeRule, f, closeOnStart = false) {
   const filename = buildFilename(settings.filenamePattern, {
@@ -243,22 +203,19 @@ export async function runDownload({ mode }) {
     }
   }
 
-  const seenUrls = new Set();
-  for (const entry of taskEntries) {
-    if (seenUrls.has(entry.plan.url)) {
-      entry.isDuplicate = true;
+  const markedEntries = markDuplicatesByUrl(taskEntries, (e) => e?.plan?.url);
+  for (const entry of markedEntries) {
+    if (entry.isDuplicate) {
       await updateTask(entry.task.id, { status: "completed", lastError: "duplicate" });
       const traceEntry = traceByTabId.get(entry.tab?.id);
       if (traceEntry) {
         traceEntry.decision = "skipped";
         traceEntry.reason = "duplicate";
       }
-    } else {
-      seenUrls.add(entry.plan.url);
     }
   }
 
-  const results = await Promise.allSettled(taskEntries.filter(e => !e.isDuplicate).map(entry => limitDl(async () => {
+  const results = await Promise.allSettled(markedEntries.filter(e => !e.isDuplicate).map(entry => limitDl(async () => {
     const started = await startDownloadForPlan(entry.plan, settings, batchDate, false);
     if (!started.ok) {
       const reason = started.reason || "no-download";
