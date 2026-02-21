@@ -420,6 +420,10 @@
                     <p><strong>Scope:</strong> This extension is designed exclusively for single‑media tabs — pages that display exactly one piece of content (for example, a direct image/video/audio/PDF URL). It does not crawl pages to discover assets and is <strong>not</strong> an image scraper.</p>
                     <p class="note">How to use: Click the toolbar button to run with your default scope. Or right‑click the toolbar icon for quick actions like “current window” or “all windows”.</p>
                     <p class="note">Privacy: All logic runs locally in your browser. The extension does not contact external services.</p>
+                    <h3 class="h3">Current limitations</h3>
+                    <ul>
+                        <li>Downloads always start a new request. In theory an extension could try to reuse bytes already loaded in a tab, but CSP/CORS protections typically prevent that for cross‑origin content. We avoid hacky workarounds, so the same file may be fetched twice (once to display it, once to download it).</li>
+                    </ul>
                 </fieldset>
             </section>
         </div>
