@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createStorageFixture, createDownloadsStub, createTabsStub, createChromeBase, ref } from "./helpers/chrome-stubs.mjs";
-import { resetTasksStorage } from "./helpers/tasks-helpers.mjs";
+import { resetTasksStorage, createTaskWithDownloadId } from "./helpers/tasks-helpers.mjs";
 
 const onChangedListener = ref(null);
 let currentTabs = [];
@@ -48,7 +48,7 @@ const downloadsState = await import("../src/downloadsState.js");
 const { setDownloadTabMapping, setPendingSizeConstraint } = downloadsState;
 ({ downloadIdToMeta, pendingSizeConstraints } = downloadsState);
 const tasksState = await import("../src/tasksState.js");
-const { upsertTask, updateTask, getTasks } = tasksState;
+const { getTasks } = tasksState;
 const { runDownload } = await import("../src/downloadOrchestrator.js");
 
 // 1) Close-on-start uses tabUrl as the guard (not download URL)
@@ -93,8 +93,7 @@ const { runDownload } = await import("../src/downloadOrchestrator.js");
   resetState();
   await resetTasksStorage();
   storage.sync = { closeTabAfterDownload: false, keepWindowOpenOnLastTabClose: false };
-  const task = await upsertTask({ tabId: 1, url: "https://example.com/file.jpg", kind: "manual" });
-  await updateTask(task.id, { downloadId: 42, status: "started" });
+  await createTaskWithDownloadId({ tabId: 1, url: "https://example.com/file.jpg", downloadId: 42 });
   await setPendingSizeConstraint(42, { minBytes: 0, maxBytes: 100 });
   searchResults.set(42, [{ id: 42, fileSize: 1024, bytesReceived: 1024 }]);
   const before = await getTasks();

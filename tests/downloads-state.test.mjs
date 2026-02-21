@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createStorageFixture, createDownloadsStub, createTabsStub, createChromeBase, ref } from "./helpers/chrome-stubs.mjs";
-import { resetTasksStorage } from "./helpers/tasks-helpers.mjs";
+import { resetTasksStorage, createTaskWithDownloadId } from "./helpers/tasks-helpers.mjs";
 
 const onChangedListener = ref(null);
 const tabsById = new Map();
@@ -45,14 +45,13 @@ globalThis.chrome = createChromeBase({ storageFixture, downloads, tabs });
 const downloadsState = await import("../src/downloadsState.js");
 const { setDownloadTabMapping, setPendingSizeConstraint } = downloadsState;
 const tasksState = await import("../src/tasksState.js");
-const { upsertTask, updateTask, getTasks } = tasksState;
+const { getTasks } = tasksState;
 
 // 1) Interrupted downloads mark task failed and clear state
 {
   resetState(downloadsState);
   await resetTasksStorage();
-  const task = await upsertTask({ tabId: 1, url: "https://example.com/a.jpg", kind: "manual" });
-  await updateTask(task.id, { downloadId: 1, status: "started" });
+  await createTaskWithDownloadId({ tabId: 1, url: "https://example.com/a.jpg", downloadId: 1 });
   await setDownloadTabMapping(1, 1, "https://example.com/a.jpg", "https://example.com/a.jpg", false);
   await setPendingSizeConstraint(1, { minBytes: 0, maxBytes: 1000 });
 
@@ -106,8 +105,7 @@ const { upsertTask, updateTask, getTasks } = tasksState;
   storage.sync = { closeTabAfterDownload: true, keepWindowOpenOnLastTabClose: false };
   const tab = { id: 4, url: "https://example.com/done.jpg", windowId: 1 };
   tabsById.set(4, tab);
-  const task = await upsertTask({ tabId: 4, url: tab.url, kind: "manual" });
-  await updateTask(task.id, { downloadId: 4, status: "started" });
+  await createTaskWithDownloadId({ tabId: 4, url: tab.url, downloadId: 4 });
   await setDownloadTabMapping(4, 4, tab.url, tab.url, false);
 
   const listener = onChangedListener.current || globalThis.__dmtOnChangedListener;
@@ -123,8 +121,7 @@ const { upsertTask, updateTask, getTasks } = tasksState;
 {
   resetState(downloadsState);
   await resetTasksStorage();
-  const task = await upsertTask({ tabId: 5, url: "https://example.com/big.jpg", kind: "manual" });
-  await updateTask(task.id, { downloadId: 5, status: "started" });
+  await createTaskWithDownloadId({ tabId: 5, url: "https://example.com/big.jpg", downloadId: 5 });
   await setPendingSizeConstraint(5, { minBytes: 0, maxBytes: 100 });
   await setDownloadTabMapping(5, 5, "https://example.com/big.jpg", "https://example.com/big.jpg", false);
 
