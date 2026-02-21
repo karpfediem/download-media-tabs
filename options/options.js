@@ -2,7 +2,7 @@
 // Saves everything to chrome.storage.sync using DEFAULTS that come from shared src/constants.js.
 
 import { DEFAULT_SETTINGS as DEFAULTS } from "../src/constants.js";
-import { getTasks, clearTasksByStatus } from "../src/tasksState.js";
+import { getTasks, clearTasksByStatus, removeTask } from "../src/tasksState.js";
 
 // ---------- Utilities ----------
 
@@ -675,7 +675,15 @@ async function renderTasks() {
     filtered.forEach(task => {
         const tr = document.createElement("tr");
         const tdStatus = document.createElement("td");
-        tdStatus.textContent = task.status || "";
+        const statusWrap = document.createElement("span");
+        statusWrap.className = "task-status";
+        const dot = document.createElement("span");
+        dot.className = `task-dot ${task.status || "unknown"}`;
+        const label = document.createElement("span");
+        label.textContent = task.status || "";
+        statusWrap.appendChild(dot);
+        statusWrap.appendChild(label);
+        tdStatus.appendChild(statusWrap);
         const tdUrl = document.createElement("td");
         tdUrl.className = "url";
         tdUrl.textContent = task.url || "";
@@ -691,6 +699,12 @@ async function renderTasks() {
             btn.dataset.taskId = task.id;
             tdActions.appendChild(btn);
         }
+        const rm = document.createElement("button");
+        rm.className = "task-btn";
+        rm.textContent = "Remove from queue";
+        rm.dataset.action = "removeTask";
+        rm.dataset.taskId = task.id;
+        tdActions.appendChild(rm);
         tr.appendChild(tdStatus);
         tr.appendChild(tdUrl);
         tr.appendChild(tdUpdated);
@@ -760,6 +774,13 @@ document.addEventListener("DOMContentLoaded", () => {
             if (taskId) {
                 chrome.runtime.sendMessage({ type: "dmt_retry_task", taskId });
                 showToast("Retry queued.", "info", 1200);
+            }
+            return;
+        }
+        if (t.dataset?.action === "removeTask") {
+            const taskId = t.dataset.taskId;
+            if (taskId) {
+                removeTask(taskId).then(renderTasks);
             }
             return;
         }

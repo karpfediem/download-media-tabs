@@ -282,6 +282,7 @@
                     </div>
                     <label class="inline"><input type="checkbox" id="autoCloseOnStart"> Close tab immediately after download starts</label>
                     <p class="note">When enabled, the extension will try to download new tabs based on the timing above. Respects all filters and post-actions.</p>
+                    <p class="note">Auto-close only happens if a download actually starts.</p>
                 </fieldset>
                 <fieldset>
                     <legend>Post actions</legend>
@@ -298,7 +299,7 @@
             <section class="panel" id="panel-tasks" role="tabpanel" aria-labelledby="tab-tasks" hidden>
                 <fieldset>
                     <legend>Task queue</legend>
-                    <div class="row">
+                    <div class="row task-row">
                         <label>Filter status
                             <select id="taskFilterStatus">
                                 <option value="all">All</option>
@@ -311,8 +312,8 @@
                         <label>Search URL
                             <input id="taskFilterText" type="text" placeholder="Filter by URL substring">
                         </label>
-                        <button id="taskClearCompleted" type="button">Clear completed</button>
-                        <button id="taskClearFailed" type="button">Clear failed</button>
+                        <button id="taskClearCompleted" class="task-clear" type="button">Clear completed</button>
+                        <button id="taskClearFailed" class="task-clear" type="button">Clear failed</button>
                     </div>
                     <div id="tasksEmpty" class="note">No tasks yet.</div>
                     <table class="tasks-table" id="tasksTable">
@@ -321,12 +322,13 @@
                                 <th>Status</th>
                                 <th>URL</th>
                                 <th>Updated</th>
-                                <th>Actions</th>
+                                <th>Queue</th>
                             </tr>
                         </thead>
                         <tbody id="tasksTbody"></tbody>
                     </table>
                     <p class="note">Retry opens the URL in a background tab and re‑attempts the download.</p>
+                    <p class="note">Removing a task only removes it from the queue; it does not delete downloaded files.</p>
                 </fieldset>
             </section>
 
@@ -343,6 +345,10 @@
                     <p class="note">
                         In strict mode, a page qualifies only if it has exactly one media element, it is a direct child of <span class="kbd">&lt;body&gt;</span>,
                         and it covers the given fraction of the viewport.
+                    </p>
+                    <p class="note">
+                        Strict mode probes the page, which requires site access. If access isn’t granted, strict checks are skipped and the extension falls back to URL/MIME hints.
+                        Grant access via <strong>Performance → Allow pre‑fetching sites → Request permissions</strong> (or in <span class="kbd">chrome://extensions</span>).
                     </p>
                 </fieldset>
 

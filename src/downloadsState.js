@@ -4,13 +4,13 @@ import { updateTaskByDownloadId } from './tasksState.js';
 
 const SESSION_KEY = "dmtDownloadState";
 
-export const downloadIdToTabId = new Map();
+export const downloadIdToMeta = new Map();
 export const pendingSizeConstraints = new Map();
 
 async function persistState() {
   try {
     const obj = {
-      downloadIdToTabId: Array.from(downloadIdToTabId.entries()),
+      downloadIdToMeta: Array.from(downloadIdToMeta.entries()),
       pendingSizeConstraints: Array.from(pendingSizeConstraints.entries())
     };
     if (chrome.storage?.session) {
@@ -25,10 +25,17 @@ async function loadState() {
     const obj = await chrome.storage.session.get({ [SESSION_KEY]: null });
     const data = obj && obj[SESSION_KEY];
     if (!data) return;
+    if (Array.isArray(data.downloadIdToMeta)) {
+      for (const [id, meta] of data.downloadIdToMeta) {
+        if (typeof id === "number" && meta && typeof meta === "object") {
+          downloadIdToMeta.set(id, meta);
+        }
+      }
+    }
     if (Array.isArray(data.downloadIdToTabId)) {
       for (const [id, tabId] of data.downloadIdToTabId) {
         if (typeof id === "number" && typeof tabId === "number") {
-          downloadIdToTabId.set(id, tabId);
+          downloadIdToMeta.set(id, { tabId });
         }
       }
     }
@@ -42,15 +49,19 @@ async function loadState() {
   } catch {}
 }
 
-export async function setDownloadTabMapping(downloadId, tabId) {
+export async function setDownloadTabMapping(downloadId, tabId, url, closeOnStart = false) {
   if (typeof downloadId !== "number" || typeof tabId !== "number") return;
-  downloadIdToTabId.set(downloadId, tabId);
+  downloadIdToMeta.set(downloadId, {
+    tabId,
+    url: url || "",
+    closeOnStart: !!closeOnStart
+  });
   await persistState();
 }
 
 export async function clearDownloadTabMapping(downloadId) {
   if (typeof downloadId !== "number") return;
-  downloadIdToTabId.delete(downloadId);
+  downloadIdToMeta.delete(downloadId);
   await persistState();
 }
 
@@ -98,7 +109,8 @@ chrome.downloads.onChanged.addListener(async (delta) => {
   }
 
   if (delta.state && delta.state.current === "complete") {
-    const tabId = downloadIdToTabId.get(id);
+    const meta = downloadIdToMeta.get(id);
+    const tabId = meta && typeof meta.tabId === "number" ? meta.tabId : null;
     try {
       if (pendingSizeConstraints.has(id)) {
         const { minBytes, maxBytes } = pendingSizeConstraints.get(id);
@@ -121,6 +133,17 @@ chrome.downloads.onChanged.addListener(async (delta) => {
 
       const settings = await getSettings();
       if (tabId != null && settings.closeTabAfterDownload) {
+        if (meta && meta.url) {
+          try {
+            const tab = await chrome.tabs.get(tabId);
+            if (tab && tab.url !== meta.url) {
+              // Tab navigated elsewhere; skip auto-close.
+              await updateTaskByDownloadId(id, { status: "completed" });
+              await clearDownloadTabMapping(id);
+              return;
+            }
+          } catch {}
+        }
         await closeTabRespectingWindow(tabId, settings);
       }
       await updateTaskByDownloadId(id, { status: "completed" });
@@ -133,5 +156,32 @@ chrome.downloads.onChanged.addListener(async (delta) => {
     await clearPendingSizeConstraint(id);
     await clearDownloadTabMapping(id);
     await updateTaskByDownloadId(id, { status: "failed", lastError: "interrupted" });
+  }
+
+  if ((delta.state && delta.state.current === "in_progress") ||
+      (delta.bytesReceived && typeof delta.bytesReceived.current === "number" && delta.bytesReceived.current > 0)) {
+    const meta = downloadIdToMeta.get(id);
+    if (meta && meta.closeOnStart && typeof meta.tabId === "number") {
+      if (meta.url) {
+        try {
+          const tab = await chrome.tabs.get(meta.tabId);
+          if (!tab || tab.url !== meta.url) {
+            meta.closeOnStart = false;
+            downloadIdToMeta.set(id, meta);
+            await persistState();
+            return;
+          }
+        } catch {
+          meta.closeOnStart = false;
+          downloadIdToMeta.set(id, meta);
+          await persistState();
+          return;
+        }
+      }
+      try { await closeTabRespectingWindow(meta.tabId, await getSettings()); } catch {}
+      meta.closeOnStart = false;
+      downloadIdToMeta.set(id, meta);
+      await persistState();
+    }
   }
 });

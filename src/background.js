@@ -3,8 +3,7 @@
 
 import { setDefaultContextMenus, installActionClick, installContextMenuClick } from './menus.js';
 import { runDownload, runDownloadForTab } from './downloadOrchestrator.js';
-import { closeTabRespectingWindow } from './closeTab.js';
-import { upsertTask, updateTask, getTasks, getTaskById } from './tasksState.js';
+import { upsertTask, updateTask, getTasks, getTaskById, markTasksForClosedTab } from './tasksState.js';
 import './downloadsState.js'; // side-effect: installs downloads onChanged listener
 
 // Initialize context menus on install/startup
@@ -56,19 +55,20 @@ async function refreshAutoRunSetting() {
   }
 }
 
-async function runAutoTaskForTab(tab, task) {
+async function runAutoTaskForTab(tab, task, phase) {
   if (!tab || !tab.url) return;
   const nextAttempts = Number(task.attempts || 0) + 1;
   await updateTask(task.id, { status: "started", attempts: nextAttempts, lastAttemptAt: Date.now() });
   let downloadId = null;
-  try { downloadId = await runDownloadForTab(tab); } catch {}
+  try { downloadId = await runDownloadForTab(tab, { closeOnStart: autoCloseOnStart }); } catch {}
   if (typeof downloadId === "number") {
     await updateTask(task.id, { downloadId });
   } else {
-    await updateTask(task.id, { status: "failed", lastError: "no-download" });
-  }
-  if (autoCloseOnStart) {
-    try { await closeTabRespectingWindow(tab.id, { keepWindowOpenOnLastTabClose }); } catch {}
+    const retryOnComplete = (phase === "start" && autoRunTiming === "start" && !autoCloseOnStart);
+    await updateTask(task.id, {
+      status: retryOnComplete ? "pending" : "failed",
+      lastError: "no-download"
+    });
   }
 }
 
@@ -76,20 +76,27 @@ async function handleAutoRun(tab, phase) {
   if (!autoRunEnabled) return;
   if (!tab || !tab.url) return;
   if (manualRetryByTabId.has(tab.id)) return;
-  if (autoRunTiming !== phase) return;
   try {
     const u = new URL(tab.url);
     if (!['http:', 'https:', 'file:', 'ftp:', 'data:'].includes(u.protocol)) return;
   } catch { return; }
 
-  const prevUrl = lastProcessedUrlByTab.get(tab.id);
-  if (prevUrl === tab.url) return;
-
   const task = await upsertTask({ tabId: tab.id, url: tab.url, kind: "auto" });
   if (task.status !== "pending") return;
 
+  const prevUrl = lastProcessedUrlByTab.get(tab.id);
+  if (prevUrl === tab.url && task.lastError !== "no-download") return;
+
+  if (phase === "start" && task.lastError === "no-download") return;
+
+  const shouldRun =
+    (autoRunTiming === phase) ||
+    (phase === "complete" && task.lastError === "no-download");
+
+  if (!shouldRun) return;
+
   lastProcessedUrlByTab.set(tab.id, tab.url);
-  await runAutoTaskForTab(tab, task);
+  await runAutoTaskForTab(tab, task, phase);
 }
 
 async function processPendingTasks() {
@@ -104,7 +111,10 @@ async function processPendingTasks() {
     if (!tab || tab.url !== task.url) continue;
     if (autoRunTiming === "complete" && tab.status !== "complete") continue;
     if (autoRunTiming === "start" && tab.status !== "loading" && tab.status !== "complete") continue;
-    await runAutoTaskForTab(tab, task);
+    if (autoRunTiming === "start" && tab.status === "complete" && task.lastError !== "no-download") {
+      continue;
+    }
+    await runAutoTaskForTab(tab, task, (autoRunTiming === "start" ? "start" : "complete"));
   }
 }
 
@@ -145,6 +155,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
 chrome.tabs.onRemoved.addListener((tabId) => {
   lastProcessedUrlByTab.delete(tabId);
   manualRetryByTabId.delete(tabId);
+  try { markTasksForClosedTab(tabId); } catch {}
 });
 
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
@@ -189,6 +200,6 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   try {
     const task = await getTaskById(taskId);
     if (!task) return;
-    await runAutoTaskForTab(tab, task);
+    await runAutoTaskForTab(tab, task, "complete");
   } catch {}
 });

@@ -7,6 +7,7 @@ import { applyPreFilters } from './filters.js';
 import { sizeWithin, headContentLength } from './headSize.js';
 import { decideTab } from './decide.js';
 import { setDownloadTabMapping, setPendingSizeConstraint, pendingSizeConstraints } from './downloadsState.js';
+import { upsertTask, updateTask, getTaskById } from './tasksState.js';
 
 // Internal helpers to reduce duplication and keep behavior consistent
 function planFromDecision(decision, settings, tabId) {
@@ -49,7 +50,12 @@ function planFromDecision(decision, settings, tabId) {
   };
 }
 
-async function startDownloadWithBookkeeping(p, settings, batchDate, hasSizeRule, f) {
+async function startDownloadWithBookkeeping(p, settings, batchDate, hasSizeRule, f, closeOnStart = false) {
+  if (p.taskId) {
+    const existing = await getTaskById(p.taskId);
+    const attempts = Number(existing?.attempts || 0) + 1;
+    await updateTask(p.taskId, { status: "started", attempts, lastAttemptAt: Date.now() });
+  }
   const filename = buildFilename(settings.filenamePattern, {
     date: batchDate,
     host: p.host,
@@ -73,10 +79,15 @@ async function startDownloadWithBookkeeping(p, settings, batchDate, hasSizeRule,
   }).catch(() => null);
 
   if (typeof downloadId === 'number') {
-    if (p.tabId != null) await setDownloadTabMapping(downloadId, p.tabId);
+    if (p.tabId != null) await setDownloadTabMapping(downloadId, p.tabId, p.url, closeOnStart);
     if (hasSizeRule && !p.bypassFilters && p.postSizeEnforce) {
       await setPendingSizeConstraint(downloadId, { minBytes: f.minBytes, maxBytes: f.maxBytes });
     }
+    if (p.taskId) {
+      await updateTask(p.taskId, { downloadId });
+    }
+  } else if (p.taskId) {
+    await updateTask(p.taskId, { status: "failed", lastError: "no-download" });
   }
   return downloadId;
 }
@@ -85,10 +96,10 @@ async function ensureHostPermissionsFromWhitelist(settings) {
   try {
     const patterns = Array.isArray(settings.allowedOrigins) ? settings.allowedOrigins.filter(Boolean) : [];
     if (!patterns.length) return false;
-    // Request all at once; Chrome will only prompt for ones not yet granted.
-    return await new Promise((resolve) => {
-      chrome.permissions.request({ origins: patterns }, (granted) => resolve(!!granted));
+    const ok = await new Promise(resolve => {
+      chrome.permissions.contains({ origins: patterns }, resolve);
     });
+    return !!ok;
   } catch {
     return false;
   }
@@ -127,9 +138,19 @@ export async function runDownload({ mode }) {
   const f = Object.assign({}, DEFAULT_SETTINGS.filters, settings.filters || {});
   const hasSizeRule = filtersOn && (f.minBytes > 0 || f.maxBytes > 0);
 
+  let probeFailed = 0;
+  let probeBlocked = 0;
   for (let i = 0; i < decisions.length; i++) {
     const res = decisions[i];
-    if (res.status !== "fulfilled" || !res.value || !res.value.shouldDownload) continue;
+    if (res.status !== "fulfilled" || !res.value || !res.value.shouldDownload) {
+      if (res.status === "fulfilled" && res.value && res.value.reason === "probe-failed") {
+        probeFailed += 1;
+      }
+      if (res.status === "fulfilled" && res.value && res.value.reason === "no-site-access") {
+        probeBlocked += 1;
+      }
+      continue;
+    }
 
     const tab = candidateTabs[i];
     const { downloadUrl, suggestedExt, baseName, mimeFromProbe, imageWidth, imageHeight } = res.value;
@@ -143,6 +164,11 @@ export async function runDownload({ mode }) {
 
   if (!plans.length) {
     console.log("[Download Media Tabs] Nothing to download after filtering.");
+    if (probeBlocked > 0) {
+      console.warn("[Download Media Tabs] Probe blocked by missing site access. Grant site access (chrome://extensions or Performance → Request permissions) or disable strict detection.");
+    } else if (probeFailed > 0) {
+      console.warn("[Download Media Tabs] Probe failed. Try reloading the tab or disabling strict detection.");
+    }
     return;
   }
 
@@ -183,6 +209,11 @@ export async function runDownload({ mode }) {
     return;
   }
 
+  for (const plan of plans) {
+    const task = await upsertTask({ tabId: plan.tabId, url: plan.url, kind: "manual" });
+    plan.taskId = task?.id;
+  }
+
   const limitDl = pLimit(Math.max(1, settings.downloadConcurrency | 0));
   const results = await Promise.allSettled(plans.map(p => limitDl(async () => {
     await startDownloadWithBookkeeping(p, settings, batchDate, hasSizeRule, f);
@@ -194,8 +225,9 @@ export async function runDownload({ mode }) {
 }
 
 // Run for a single tab (used by auto-run on new tabs)
-export async function runDownloadForTab(tabOrId) {
+export async function runDownloadForTab(tabOrId, opts = {}) {
   const settings = await getSettings();
+  const closeOnStart = !!opts.closeOnStart;
 
   // Attempt to acquire optional host permissions as per user whitelist (autorun path)
   try { await ensureHostPermissionsFromWhitelist(settings); } catch {}
@@ -235,7 +267,7 @@ export async function runDownloadForTab(tabOrId) {
     }
   }
 
-  const downloadId = await startDownloadWithBookkeeping(plan, settings, batchDate, hasSizeRule, f);
+  const downloadId = await startDownloadWithBookkeeping(plan, settings, batchDate, hasSizeRule, f, closeOnStart);
 
   if (typeof downloadId === 'number') {
     console.log("[Download Media Tabs] Started 1 download (auto-run)");

@@ -224,12 +224,34 @@ input:focus-visible, textarea:focus-visible, select:focus-visible{
 }
 .tasks-table th{ color:var(--ctp-subtext1); font-weight:650; }
 .tasks-table td.url{ word-break:break-all; }
-.tasks-table td.actions{ white-space:nowrap; }
+.tasks-table td.actions{ white-space:nowrap; display:flex; gap:6px; align-items:center; }
 button.task-btn{
     padding:4px 8px;
     border-radius:8px;
     font-size:12px;
 }
+.task-row{
+    align-items:flex-end;
+    flex-wrap:wrap;
+}
+.task-row > label{ flex:1 1 260px; }
+.task-row > button{
+    flex:0 0 auto;
+    align-self:flex-end;
+    margin-bottom:8px;
+}
+.task-status{
+    display:inline-flex; align-items:center; gap:8px;
+    text-transform:capitalize;
+}
+.task-dot{
+    width:10px; height:10px; border-radius:999px;
+    background: var(--border);
+}
+.task-dot.pending{ background: var(--ctp-yellow); }
+.task-dot.started{ background: var(--ctp-blue); }
+.task-dot.failed{ background: var(--ctp-red); }
+.task-dot.completed{ background: var(--ctp-green); }
 .warning{
     display:block; border:1px solid var(--ctp-yellow);
     background: color-mix(in srgb, var(--ctp-yellow) 14%, transparent);

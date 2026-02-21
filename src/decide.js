@@ -5,6 +5,8 @@ import { probeDocument } from './probe.js';
 
 export async function decideTab(tab, settings) {
   const url = tab.url || "";
+  const canProbe = await canProbeUrl(url);
+  const strict = !!settings.strictSingleDetection && canProbe;
 
   const f = Object.assign({}, settings.filters || {});
   const needDims = !!settings.filtersEnabled && hasActiveDimensionRules(f);
@@ -36,10 +38,13 @@ export async function decideTab(tab, settings) {
       };
     }
     try {
+      if (!canProbe) {
+        return { shouldDownload: false, reason: "no-site-access" };
+      }
       const [{ result }] = await chrome.scripting.executeScript({
         target: { tabId: tab.id },
         func: probeDocument,
-        args: [!!settings.strictSingleDetection, Number(settings.coverageThreshold) || 0.5]
+        args: [strict, Number(settings.coverageThreshold) || 0.5]
       });
       return {
         shouldDownload: true,
@@ -53,17 +58,7 @@ export async function decideTab(tab, settings) {
         imageHeight: result?.imageHeight
       };
     } catch {
-      return {
-        shouldDownload: true,
-        downloadUrl: url,
-        suggestedExt: mediaExt || hintedExt || undefined,
-        baseName: lastPathSegment(url),
-        mimeFromProbe: "",
-        bypassFilters,
-        triggered: true,
-        imageWidth: undefined,
-        imageHeight: undefined
-      };
+      return { shouldDownload: false, reason: "probe-failed" };
     }
   }
 
@@ -71,12 +66,12 @@ export async function decideTab(tab, settings) {
   if (chosenExt) {
     const mime = MEDIA_EXTENSIONS.get(chosenExt) || "";
     if (isMimeIncluded(mime, settings)) {
-      if (settings.strictSingleDetection) {
+      if (strict) {
         try {
           const [{ result }] = await chrome.scripting.executeScript({
             target: { tabId: tab.id },
             func: probeDocument,
-            args: [!!settings.strictSingleDetection, Number(settings.coverageThreshold) || 0.5]
+            args: [strict, Number(settings.coverageThreshold) || 0.5]
           });
           if (result && result.single) {
             const chosen = absolutePrefer(result.src, result.href);
@@ -92,7 +87,7 @@ export async function decideTab(tab, settings) {
           }
           return { shouldDownload: false };
         } catch {
-          return { shouldDownload: false };
+          return { shouldDownload: false, reason: "probe-failed" };
         }
       }
       if (!needDims) {
@@ -106,11 +101,14 @@ export async function decideTab(tab, settings) {
           imageHeight: undefined
         };
       }
+      if (!canProbe) {
+        return { shouldDownload: false, reason: "no-site-access" };
+      }
       try {
         const [{ result }] = await chrome.scripting.executeScript({
           target: { tabId: tab.id },
           func: probeDocument,
-          args: [!!settings.strictSingleDetection, Number(settings.coverageThreshold) || 0.5]
+          args: [strict, Number(settings.coverageThreshold) || 0.5]
         });
         if (result && (result.single || /^(image)\//i.test(result.contentType))) {
           const chosen = absolutePrefer(result.src, result.href);
@@ -124,7 +122,9 @@ export async function decideTab(tab, settings) {
             imageHeight: result.imageHeight
           };
         }
-      } catch {}
+      } catch {
+        return { shouldDownload: false, reason: "probe-failed" };
+      }
       return {
         shouldDownload: true,
         downloadUrl: url,
@@ -137,11 +137,14 @@ export async function decideTab(tab, settings) {
     }
   }
 
+  if (!canProbe) {
+    return { shouldDownload: false, reason: "no-site-access" };
+  }
   try {
     const [{ result }] = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: probeDocument,
-      args: [!!settings.strictSingleDetection, Number(settings.coverageThreshold) || 0.5]
+      args: [strict, Number(settings.coverageThreshold) || 0.5]
     });
 
     if (!result) return { shouldDownload: false };
@@ -181,7 +184,23 @@ export async function decideTab(tab, settings) {
         imageHeight
       };
     }
-  } catch {}
+  } catch {
+    return { shouldDownload: false, reason: "probe-failed" };
+  }
 
   return { shouldDownload: false };
+}
+
+async function canProbeUrl(url) {
+  try {
+    if (!chrome.permissions || !chrome.permissions.contains) return false;
+    const u = new URL(url || "");
+    if (!["http:", "https:", "file:", "ftp:"].includes(u.protocol)) return false;
+    const origin = (u.protocol === "file:") ? "file:///*" : `${u.origin}/*`;
+    return await new Promise(resolve => {
+      chrome.permissions.contains({ origins: [origin] }, (ok) => resolve(!!ok));
+    });
+  } catch {
+    return false;
+  }
 }

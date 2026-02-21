@@ -31,7 +31,7 @@ export async function getTaskById(id) {
 export async function upsertTask({ tabId, url, kind }) {
   const tasks = await getTasks();
   const existing = tasks.find(t =>
-    t && t.tabId === tabId && t.url === url && t.status !== "completed"
+    t && t.tabId === tabId && t.url === url && t.kind === (kind || "auto") && t.status !== "completed"
   );
   if (existing) return existing;
   const task = {
@@ -81,4 +81,19 @@ export async function removeTask(id) {
   const tasks = await getTasks();
   const filtered = tasks.filter(t => t && t.id !== id);
   await saveTasks(filtered);
+}
+
+export async function markTasksForClosedTab(tabId) {
+  if (typeof tabId !== "number") return;
+  const tasks = await getTasks();
+  let changed = false;
+  const nowTs = now();
+  const next = tasks.map(t => {
+    if (!t || t.tabId !== tabId) return t;
+    if (t.status !== "pending" && t.status !== "started") return t;
+    if (typeof t.downloadId === "number") return t;
+    changed = true;
+    return { ...t, status: "failed", lastError: "tab-closed", updatedAt: nowTs };
+  });
+  if (changed) await saveTasks(next);
 }
