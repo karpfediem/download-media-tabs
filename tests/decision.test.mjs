@@ -105,4 +105,13 @@ function s(overrides = {}) {
   assert.equal(res.suggestedExt, "pdf");
 }
 
+// 8) Strict mode + no site access + no extension -> no-site-access
+{
+  const settings = s({ strictSingleDetection: true, inferExtensionFromUrl: false, filtersEnabled: false });
+  const url = "https://example.com/resource";
+  const res = decideFromProbe({ url, settings, canProbe: false, probeResult: null });
+  assert.equal(res.shouldDownload, false);
+  assert.equal(res.reason, "no-site-access");
+}
+
 console.log("decision.test.mjs passed");
