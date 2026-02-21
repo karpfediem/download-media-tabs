@@ -57,7 +57,10 @@ globalThis.chrome = {
   },
   downloads: {
     onChanged: {
-      addListener: (fn) => { onChangedListener = fn; }
+      addListener: (fn) => {
+        onChangedListener = fn;
+        globalThis.__dmtOnChangedListener = fn;
+      }
     },
     download: async (opts) => {
       downloadCalls.push(opts);
@@ -107,7 +110,8 @@ const { runDownload } = await import("../src/downloadOrchestrator.js");
   const tab = { id: 1, url: tabUrl, windowId: 1 };
   tabsById.set(1, tab);
   await setDownloadTabMapping(10, 1, tabUrl, downloadUrl, true);
-  await onChangedListener({ id: 10, state: { current: "in_progress" } });
+  const listener = onChangedListener || globalThis.__dmtOnChangedListener;
+  await listener({ id: 10, state: { current: "in_progress" } });
   assert.deepEqual(removedTabs, [1]);
 }
 

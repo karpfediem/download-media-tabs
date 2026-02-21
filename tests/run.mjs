@@ -1,7 +1,8 @@
-import "./decision.test.mjs";
-import "./automation-close.test.mjs";
-import "./task-utils.test.mjs";
-import "./task-pipeline.test.mjs";
-import "./filters.test.mjs";
+await import("./decision.test.mjs");
+await import("./automation-close.test.mjs");
+await import("./task-utils.test.mjs");
+await import("./task-pipeline.test.mjs");
+await import("./filters.test.mjs");
+await import("./downloads-state.test.mjs");
 
 console.log("All tests passed.");
