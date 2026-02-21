@@ -49,11 +49,12 @@ async function loadState() {
   } catch {}
 }
 
-export async function setDownloadTabMapping(downloadId, tabId, url, closeOnStart = false) {
+export async function setDownloadTabMapping(downloadId, tabId, tabUrl, downloadUrl, closeOnStart = false) {
   if (typeof downloadId !== "number" || typeof tabId !== "number") return;
   downloadIdToMeta.set(downloadId, {
     tabId,
-    url: url || "",
+    tabUrl: tabUrl || "",
+    downloadUrl: downloadUrl || "",
     closeOnStart: !!closeOnStart
   });
   await persistState();
@@ -119,6 +120,8 @@ chrome.downloads.onChanged.addListener(async (delta) => {
   if (delta.state && delta.state.current === "complete") {
     const meta = downloadIdToMeta.get(id);
     const tabId = meta && typeof meta.tabId === "number" ? meta.tabId : null;
+    const tabUrl = meta && typeof meta.tabUrl === "string" ? meta.tabUrl : "";
+    const downloadUrl = meta && typeof meta.downloadUrl === "string" ? meta.downloadUrl : (meta && typeof meta.url === "string" ? meta.url : "");
     try {
       if (pendingSizeConstraints.has(id)) {
         const { minBytes, maxBytes } = pendingSizeConstraints.get(id);
@@ -140,11 +143,13 @@ chrome.downloads.onChanged.addListener(async (delta) => {
       }
 
       const settings = await getSettings();
-      if (tabId != null && settings.closeTabAfterDownload) {
-        if (meta && meta.url) {
+      const shouldClose = tabId != null && (settings.closeTabAfterDownload || (meta && meta.closeOnStart));
+      if (shouldClose) {
+        const guardUrl = tabUrl || downloadUrl;
+        if (guardUrl) {
           try {
             const tab = await chrome.tabs.get(tabId);
-            if (tab && tab.url !== meta.url) {
+            if (tab && tab.url !== guardUrl) {
               // Tab navigated elsewhere; skip auto-close.
               await updateTaskByDownloadId(id, { status: "completed" });
               await clearDownloadTabMapping(id);
@@ -170,10 +175,13 @@ chrome.downloads.onChanged.addListener(async (delta) => {
       (delta.bytesReceived && typeof delta.bytesReceived.current === "number" && delta.bytesReceived.current > 0)) {
     const meta = downloadIdToMeta.get(id);
     if (meta && meta.closeOnStart && typeof meta.tabId === "number") {
-      if (meta.url) {
+      const tabUrl = typeof meta.tabUrl === "string" ? meta.tabUrl : "";
+      const downloadUrl = typeof meta.downloadUrl === "string" ? meta.downloadUrl : (typeof meta.url === "string" ? meta.url : "");
+      const guardUrl = tabUrl || downloadUrl;
+      if (guardUrl) {
         try {
           const tab = await chrome.tabs.get(meta.tabId);
-          if (!tab || tab.url !== meta.url) {
+          if (!tab || tab.url !== guardUrl) {
             meta.closeOnStart = false;
             downloadIdToMeta.set(id, meta);
             await persistState();

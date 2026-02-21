@@ -5,6 +5,7 @@ import { buildFilename, lastPathSegment } from './urlUtils.js';
 import { DEFAULT_SETTINGS } from './constants.js';
 import { sizeWithin, headContentLength } from './headSize.js';
 import { setDownloadTabMapping, setPendingSizeConstraint } from './downloadsState.js';
+import { closeTabRespectingWindow } from './closeTab.js';
 import { upsertTask, updateTask, getTaskById, removeTask } from './tasksState.js';
 import { isFileSchemeAllowed } from './fileAccess.js';
 import { markDuplicatesByUrl } from './taskUtils.js';
@@ -34,7 +35,7 @@ async function startDownloadWithBookkeeping(p, settings, batchDate, hasSizeRule,
   }).catch(() => null);
 
   if (typeof downloadId === 'number') {
-    if (p.tabId != null) await setDownloadTabMapping(downloadId, p.tabId, p.url, closeOnStart);
+    if (p.tabId != null) await setDownloadTabMapping(downloadId, p.tabId, p.tabUrl || "", p.url, closeOnStart);
     if (hasSizeRule && !p.bypassFilters && p.postSizeEnforce) {
       await setPendingSizeConstraint(downloadId, { minBytes: f.minBytes, maxBytes: f.maxBytes });
     }
@@ -94,6 +95,7 @@ async function saveRunTrace(trace) {
 
 export async function runDownload({ mode }) {
   const settings = await getSettings();
+  const closeOnStart = !!settings.autoCloseOnStart;
 
   // Attempt to acquire optional host permissions as per user whitelist
   try { await ensureHostPermissionsFromWhitelist(settings); } catch {}
@@ -201,11 +203,18 @@ export async function runDownload({ mode }) {
         traceEntry.decision = "skipped";
         traceEntry.reason = "duplicate";
       }
+      if ((settings.autoCloseOnStart || settings.closeTabAfterDownload) && typeof entry.tab?.id === "number") {
+        try {
+          const tab = await chrome.tabs.get(entry.tab.id);
+          if (!tab || tab.url !== entry.tab.url) continue;
+          await closeTabRespectingWindow(entry.tab.id, settings);
+        } catch {}
+      }
     }
   }
 
   const results = await Promise.allSettled(markedEntries.filter(e => !e.isDuplicate).map(entry => limitDl(async () => {
-    const started = await startDownloadForPlan(entry.plan, settings, batchDate, false);
+    const started = await startDownloadForPlan(entry.plan, settings, batchDate, closeOnStart);
     if (!started.ok) {
       const reason = started.reason || "no-download";
       if (shouldSkipTask(reason)) {

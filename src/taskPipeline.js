@@ -9,6 +9,7 @@ export async function evaluateTabForPlan(tab, settings, decideFn = decideTab) {
   }
   const plan = planFromDecision(decision, settings, tab?.id);
   if (!plan) return { tab, ok: false, reason: "filtered" };
+  if (tab?.url) plan.tabUrl = tab.url;
   return { tab, ok: true, plan };
 }
 
