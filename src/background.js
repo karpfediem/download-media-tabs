@@ -71,12 +71,12 @@ async function refreshAutoRunSetting() {
 
 async function runAutoTaskForTab(tab, task, phase) {
   if (!tab || !tab.url) return;
-  const retryOnComplete = (phase === "start" && autoRunTiming === "start" && !autoCloseOnStart);
+  const retryOnComplete = false;
   try {
     await runTaskForTab(tab, task.id, { closeOnStart: autoCloseOnStart, retryOnComplete });
   } catch {
     await updateTask(task.id, {
-      status: retryOnComplete ? "pending" : "failed",
+      status: "failed",
       lastError: REASONS.NO_DOWNLOAD
     });
   }
@@ -109,6 +109,10 @@ async function handleAutoRun(tab, phase) {
     (phase === "complete" && lastError === REASONS.NO_DOWNLOAD);
 
   if (!existing && !shouldRun) return;
+  if (existing && existing.status === "pending" && !shouldRun) {
+    await updateTask(existing.id, { status: "failed", lastError: REASONS.NO_DOWNLOAD });
+    return;
+  }
 
   const task = existing || await upsertTask({ tabId: tab.id, url: tab.url, kind: "auto" });
   if (task.status !== "pending") return;
@@ -126,11 +130,21 @@ async function processPendingTasks() {
   if (!pending.length) return;
   for (const task of pending) {
     let tab;
-    try { tab = await tabsGet(task.tabId); } catch { continue; }
-    if (!tab || tab.url !== task.url) continue;
-    if (autoRunTiming === "complete" && tab.status !== "complete") continue;
-    if (autoRunTiming === "start" && tab.status !== "loading" && tab.status !== "complete") continue;
+    try { tab = await tabsGet(task.tabId); } catch { tab = null; }
+    if (!tab || tab.url !== task.url) {
+      await updateTask(task.id, { status: "failed", lastError: REASONS.NO_TAB });
+      continue;
+    }
+    if (autoRunTiming === "complete" && tab.status !== "complete") {
+      await updateTask(task.id, { status: "failed", lastError: REASONS.NO_DOWNLOAD });
+      continue;
+    }
+    if (autoRunTiming === "start" && tab.status !== "loading" && tab.status !== "complete") {
+      await updateTask(task.id, { status: "failed", lastError: REASONS.NO_DOWNLOAD });
+      continue;
+    }
     if (autoRunTiming === "start" && tab.status === "complete" && task.lastError !== REASONS.NO_DOWNLOAD) {
+      await updateTask(task.id, { status: "failed", lastError: REASONS.NO_DOWNLOAD });
       continue;
     }
     await runAutoTaskForTab(tab, task, (autoRunTiming === "start" ? "start" : "complete"));
