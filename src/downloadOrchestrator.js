@@ -157,48 +157,62 @@ export async function runDownload({ mode }) {
   const limitProbe = pLimit(Math.max(1, settings.probeConcurrency | 0));
   const limitDl = pLimit(Math.max(1, settings.downloadConcurrency | 0));
 
-  const taskEntries = [];
-  for (const tab of candidateTabs) {
-    const task = await upsertTask({ tabId: tab.id, url: tab.url, kind: "manual" });
-    taskEntries.push({ tab, task });
-  }
-
-  const evaluated = await Promise.allSettled(taskEntries.map(entry => limitProbe(async () => {
-    const attempts = Number(entry.task?.attempts || 0) + 1;
-    await updateTask(entry.task.id, { status: "started", attempts, lastAttemptAt: Date.now() });
-    const result = await evaluateTaskForTab(entry.tab, settings);
-    if (!result.ok) {
-      const reason = result.reason || "filtered";
-      if (shouldSkipTask(reason)) {
-        await removeTask(entry.task.id);
-      } else {
-        await updateTask(entry.task.id, { status: "failed", lastError: reason });
-      }
-      return null;
-    }
-    return { ...entry, plan: result.plan };
+  const evaluated = await Promise.allSettled(candidateTabs.map(tab => limitProbe(async () => {
+    const result = await evaluateTaskForTab(tab, settings);
+    if (!result.ok) return { tab, ok: false, reason: result.reason || "filtered" };
+    return { tab, ok: true, plan: result.plan };
   })));
 
-  const seenUrls = new Set();
-  const plans = [];
+  const reasonCounts = new Map();
+  const groups = new Map();
+  const order = [];
   for (const res of evaluated) {
     if (res.status !== "fulfilled" || !res.value) continue;
-    const plan = res.value.plan;
-    if (!plan || !plan.url) continue;
-    if (seenUrls.has(plan.url)) {
-      await updateTask(res.value.task.id, { status: "completed", lastError: "duplicate" });
+    if (!res.value.ok) {
+      const reason = String(res.value.reason || "filtered");
+      reasonCounts.set(reason, (reasonCounts.get(reason) || 0) + 1);
       continue;
     }
-    seenUrls.add(plan.url);
-    plans.push(res.value);
+    const plan = res.value.plan;
+    if (!plan || !plan.url) continue;
+    const key = plan.url;
+    if (!groups.has(key)) {
+      groups.set(key, []);
+      order.push(key);
+    }
+    groups.get(key).push({ tab: res.value.tab, plan });
   }
 
-  if (!plans.length) {
+  if (!order.length) {
     console.log("[Download Media Tabs] Nothing to download after filtering.");
+    if (reasonCounts.has("no-site-access")) {
+      console.warn("[Download Media Tabs] Probe blocked by missing site access. Grant site access (chrome://extensions or Performance → Request permissions) or disable strict detection.");
+    } else if (reasonCounts.has("probe-failed")) {
+      console.warn("[Download Media Tabs] Probe failed. Try reloading the tab or disabling strict detection.");
+    }
     return;
   }
 
-  const results = await Promise.allSettled(plans.map(entry => limitDl(async () => {
+  const taskEntries = [];
+  for (const key of order) {
+    const group = groups.get(key) || [];
+    for (const entry of group) {
+      const task = await upsertTask({ tabId: entry.tab.id, url: entry.tab.url, kind: "manual" });
+      taskEntries.push({ ...entry, task, isDuplicate: false, groupKey: key });
+    }
+  }
+
+  const seenUrls = new Set();
+  for (const entry of taskEntries) {
+    if (seenUrls.has(entry.plan.url)) {
+      entry.isDuplicate = true;
+      await updateTask(entry.task.id, { status: "completed", lastError: "duplicate" });
+    } else {
+      seenUrls.add(entry.plan.url);
+    }
+  }
+
+  const results = await Promise.allSettled(taskEntries.filter(e => !e.isDuplicate).map(entry => limitDl(async () => {
     const started = await startDownloadForPlan(entry.plan, settings, batchDate, false);
     if (!started.ok) {
       const reason = started.reason || "no-download";
