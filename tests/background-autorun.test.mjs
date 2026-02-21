@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { createStorageFixture, createDownloadsStub, createTabsStub, createChromeBase, ref } from "./helpers/chrome-stubs.mjs";
+import { resetTasksStorage } from "./helpers/tasks-helpers.mjs";
 
 const tasksState = await import("../src/tasksState.js");
 const downloadsState = await import("../src/downloadsState.js");
@@ -21,73 +23,64 @@ function createChromeStub({ sync = {}, permissionsOk = false, executeScriptThrow
     tabsRemove: [],
     contextMenusCreate: 0
   };
-  const storage = {
-    sync: { ...sync },
-    local: {},
-    session: {}
-  };
+  const storageFixture = createStorageFixture({ sync });
+  const storage = storageFixture.storage;
   const tabsById = new Map();
-  let nextTabId = 1000;
-  let nextDownloadId = 1;
+  const nextTabId = ref(1000);
+  const nextDownloadId = ref(1);
 
-  function getFromStore(area, defaults) {
-    const base = (defaults && typeof defaults === "object") ? defaults : {};
-    const data = storage[area] || {};
-    return { ...base, ...data };
-  }
+  const downloads = createDownloadsStub({
+    downloadCalls: calls.downloads,
+    nextDownloadIdRef: nextDownloadId,
+    onChangedListenerRef: ref(null)
+  });
+
+  const tabsApi = createTabsStub({
+    create: async (opts) => {
+      const tab = {
+        id: nextTabId.current++,
+        url: opts.url,
+        windowId: opts.windowId || 1,
+        status: "loading",
+        active: false
+      };
+      tabsById.set(tab.id, tab);
+      calls.tabsCreate.push(tab);
+      return tab;
+    },
+    get: async (tabId) => tabsById.get(tabId) || null,
+    query: async () => Array.from(tabsById.values()),
+    remove: (tabId, cb) => {
+      calls.tabsRemove.push(tabId);
+      if (typeof cb === "function") cb();
+    }
+  });
+
+  const chromeBase = createChromeBase({
+    storageFixture,
+    storageOnChangedListeners: listeners.storageChanged,
+    downloads,
+    tabs: tabsApi,
+    permissionsOk,
+    scriptingExecuteScript: async () => {
+      if (executeScriptThrows) throw new Error("probe failed");
+      return [{ result: null }];
+    }
+  });
 
   globalThis.chrome = {
-    storage: {
-      sync: {
-        get: (defaults, cb) => {
-          const data = getFromStore("sync", defaults);
-          if (typeof cb === "function") return cb(data);
-          return Promise.resolve(data);
-        },
-        set: async (obj) => {
-          storage.sync = { ...(storage.sync || {}), ...(obj || {}) };
-        }
-      },
-      local: {
-        get: async (defaults) => getFromStore("local", defaults),
-        set: async (obj) => { storage.local = { ...(storage.local || {}), ...(obj || {}) }; }
-      },
-      session: {
-        get: async (defaults) => getFromStore("session", defaults),
-        set: async (obj) => { storage.session = { ...(storage.session || {}), ...(obj || {}) }; }
-      },
-      onChanged: {
-        addListener: (fn) => { listeners.storageChanged.push(fn); }
-      }
-    },
+    ...chromeBase,
     runtime: {
+      ...chromeBase.runtime,
       onInstalled: { addListener: (fn) => { listeners.runtimeInstalled.push(fn); } },
       onStartup: { addListener: (fn) => { listeners.runtimeStartup.push(fn); } },
       onMessage: { addListener: (fn) => { listeners.runtimeMessage.push(fn); } },
-      openOptionsPage: () => {},
-      lastError: null
+      openOptionsPage: () => {}
     },
     tabs: {
+      ...tabsApi,
       onUpdated: { addListener: (fn) => { listeners.tabsUpdated.push(fn); } },
-      onRemoved: { addListener: (fn) => { listeners.tabsRemoved.push(fn); } },
-      create: async (opts) => {
-        const tab = {
-          id: nextTabId++,
-          url: opts.url,
-          windowId: opts.windowId || 1,
-          status: "loading",
-          active: false
-        };
-        tabsById.set(tab.id, tab);
-        calls.tabsCreate.push(tab);
-        return tab;
-      },
-      get: async (tabId) => tabsById.get(tabId) || null,
-      query: async () => Array.from(tabsById.values()),
-      remove: (tabId, cb) => {
-        calls.tabsRemove.push(tabId);
-        if (typeof cb === "function") cb();
-      }
+      onRemoved: { addListener: (fn) => { listeners.tabsRemoved.push(fn); } }
     },
     action: {
       onClicked: { addListener: (fn) => { listeners.actionClicked.push(fn); } }
@@ -96,29 +89,6 @@ function createChromeStub({ sync = {}, permissionsOk = false, executeScriptThrow
       removeAll: (cb) => { if (typeof cb === "function") cb(); },
       create: () => { calls.contextMenusCreate += 1; },
       onClicked: { addListener: (fn) => { listeners.contextMenuClicked.push(fn); } }
-    },
-    permissions: {
-      contains: (_query, cb) => cb(!!permissionsOk)
-    },
-    scripting: {
-      executeScript: async () => {
-        if (executeScriptThrows) throw new Error("probe failed");
-        return [{ result: null }];
-      }
-    },
-    downloads: {
-      onChanged: { addListener: (fn) => { listeners.downloadsChanged.push(fn); } },
-      download: async (opts) => {
-        calls.downloads.push(opts);
-        return nextDownloadId++;
-      },
-      search: async () => [],
-      cancel: async () => {},
-      removeFile: async () => {},
-      erase: async () => {}
-    },
-    extension: {
-      isAllowedFileSchemeAccess: (cb) => cb(false)
     }
   };
 
@@ -140,6 +110,7 @@ async function tick() {
   const env = createChromeStub({
     sync: { autoRunOnNewTabs: true, autoRunTiming: "start", autoCloseOnStart: false, strictSingleDetection: false }
   });
+  await resetTasksStorage();
   downloadsState.downloadIdToMeta.clear();
   downloadsState.pendingSizeConstraints.clear();
   await importBackground("auto-start");
@@ -164,6 +135,7 @@ async function tick() {
     permissionsOk: true,
     executeScriptThrows: true
   });
+  await resetTasksStorage();
   downloadsState.downloadIdToMeta.clear();
   downloadsState.pendingSizeConstraints.clear();
   await importBackground("auto-retry");
@@ -187,6 +159,7 @@ async function tick() {
   const env = createChromeStub({
     sync: { autoRunOnNewTabs: false, autoRunTiming: "start", autoCloseOnStart: false, strictSingleDetection: false }
   });
+  await resetTasksStorage();
   downloadsState.downloadIdToMeta.clear();
   downloadsState.pendingSizeConstraints.clear();
   await importBackground("manual-retry");

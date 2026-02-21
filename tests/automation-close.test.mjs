@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createStorageFixture, createDownloadsStub, createTabsStub, createChromeBase, ref } from "./helpers/chrome-stubs.mjs";
+import { resetTasksStorage } from "./helpers/tasks-helpers.mjs";
 
 const onChangedListener = ref(null);
 let currentTabs = [];
@@ -53,6 +54,7 @@ const { runDownload } = await import("../src/downloadOrchestrator.js");
 // 1) Close-on-start uses tabUrl as the guard (not download URL)
 {
   resetState();
+  await resetTasksStorage();
   storage.sync = { closeTabAfterDownload: false, keepWindowOpenOnLastTabClose: false };
   const tabUrl = "https://commons.wikimedia.org/wiki/File:Pluto_and_its_satellites_(2005).jpg";
   const downloadUrl = "https://upload.wikimedia.org/wikipedia/commons/d/d6/Pluto_and_its_satellites_%282005%29.jpg";
@@ -67,6 +69,7 @@ const { runDownload } = await import("../src/downloadOrchestrator.js");
 // 2) Duplicate tabs are skipped but still closed when autoCloseOnStart is enabled
 {
   resetState();
+  await resetTasksStorage();
   storage.sync = {
     autoCloseOnStart: true,
     closeTabAfterDownload: false,
@@ -88,6 +91,7 @@ const { runDownload } = await import("../src/downloadOrchestrator.js");
 // 3) Post-download size limits should remove the task (filtered)
 {
   resetState();
+  await resetTasksStorage();
   storage.sync = { closeTabAfterDownload: false, keepWindowOpenOnLastTabClose: false };
   const task = await upsertTask({ tabId: 1, url: "https://example.com/file.jpg", kind: "manual" });
   await updateTask(task.id, { downloadId: 42, status: "started" });

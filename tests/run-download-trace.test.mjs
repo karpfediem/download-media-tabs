@@ -1,28 +1,7 @@
 import assert from "node:assert/strict";
 import { runDownload } from "../src/downloadOrchestrator.js";
 import { DEFAULT_SETTINGS } from "../src/constants.js";
-import { createStorageFixture, createDownloadsStub, createTabsStub, createChromeBase, ref } from "./helpers/chrome-stubs.mjs";
-
-const downloadCalls = [];
-const nextDownloadId = ref(1);
-const onChangedListener = ref(null);
-const storageFixture = createStorageFixture();
-const storage = storageFixture.storage;
-
-globalThis.fetch = async (url) => {
-  const isSmall = String(url).includes("small");
-  return {
-    ok: true,
-    headers: {
-      get: (name) => {
-        if (String(name).toLowerCase() === "content-length") {
-          return isSmall ? "50" : "1000";
-        }
-        return null;
-      }
-    }
-  };
-};
+import { setupRunDownloadFixture } from "./helpers/run-download-fixture.mjs";
 
 const tabs = [
   { id: 1, url: "https://blocked.com/a.jpg", windowId: 1 },
@@ -31,28 +10,21 @@ const tabs = [
   { id: 4, url: "https://example.com/small.jpg", windowId: 1 }
 ];
 
-const downloads = createDownloadsStub({
-  onChangedListenerRef: onChangedListener,
-  downloadCalls,
-  nextDownloadIdRef: nextDownloadId
+const { storage } = setupRunDownloadFixture({
+  tabs,
+  sync: {
+    ...DEFAULT_SETTINGS,
+    filtersEnabled: true,
+    autoCloseOnStart: false,
+    closeTabAfterDownload: false,
+    filters: {
+      ...DEFAULT_SETTINGS.filters,
+      blockedDomains: ["blocked.com"],
+      minBytes: 100
+    }
+  },
+  contentLengthForUrl: (url) => (String(url).includes("small") ? 50 : 1000)
 });
-const tabsApi = createTabsStub({
-  query: async () => tabs,
-  get: async (tabId) => tabs.find(t => t.id === tabId) || null
-});
-globalThis.chrome = createChromeBase({ storageFixture, downloads, tabs: tabsApi });
-
-storage.sync = {
-  ...DEFAULT_SETTINGS,
-  filtersEnabled: true,
-  autoCloseOnStart: false,
-  closeTabAfterDownload: false,
-  filters: {
-    ...DEFAULT_SETTINGS.filters,
-    blockedDomains: ["blocked.com"],
-    minBytes: 100
-  }
-};
 
 await runDownload({ mode: "currentWindow" });
 
