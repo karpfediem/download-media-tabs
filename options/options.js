@@ -126,6 +126,7 @@ function sanitizeSettingsInput(input) {
         ? cfg.autoRunTiming
         : DEFAULTS.autoRunTiming;
     sanitized.autoCloseOnStart = !!cfg.autoCloseOnStart;
+    sanitized.autoRunPendingIntervalMin = clampInt(cfg.autoRunPendingIntervalMin, 0, 120, DEFAULTS.autoRunPendingIntervalMin);
 
     // Permissions
     sanitized.allowedOrigins = Array.isArray(cfg.allowedOrigins) ? normalizeMatchPatterns(cfg.allowedOrigins) : [];
@@ -267,6 +268,12 @@ function load() {
         $("autoRunOnNewTabs").checked = !!safeCfg.autoRunOnNewTabs;
         $("autoRunTiming").value = safeCfg.autoRunTiming || DEFAULTS.autoRunTiming;
         $("autoCloseOnStart").checked = !!safeCfg.autoCloseOnStart;
+        $("autoRunPendingIntervalMin").value = clampInt(
+            safeCfg.autoRunPendingIntervalMin,
+            0,
+            120,
+            DEFAULTS.autoRunPendingIntervalMin
+        );
 
         // Performance
         $("probeConcurrency").value    = clampInt(safeCfg.probeConcurrency, 1, 32, DEFAULTS.probeConcurrency);
@@ -351,6 +358,12 @@ function buildConfigFromUI() {
         autoRunOnNewTabs: $("autoRunOnNewTabs").checked,
         autoRunTiming: $("autoRunTiming").value || DEFAULTS.autoRunTiming,
         autoCloseOnStart: $("autoCloseOnStart").checked,
+        autoRunPendingIntervalMin: clampInt(
+            $("autoRunPendingIntervalMin").value,
+            0,
+            120,
+            DEFAULTS.autoRunPendingIntervalMin
+        ),
 
         // After
         closeTabAfterDownload: $("closeTabAfterDownload").checked,
@@ -455,7 +468,7 @@ function pickSettingsOnly(obj) {
         'inferExtensionFromUrl',
         'inferUrlAllowedExtensions','triggerUrlSubstrings','triggerBypassFilters',
         'probeConcurrency','downloadConcurrency',
-        'autoRunOnNewTabs','autoRunTiming','autoCloseOnStart',
+        'autoRunOnNewTabs','autoRunTiming','autoCloseOnStart','autoRunPendingIntervalMin',
         'closeTabAfterDownload','keepWindowOpenOnLastTabClose',
         'filtersEnabled','filters'
     ];

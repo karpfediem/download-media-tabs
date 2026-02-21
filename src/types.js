@@ -40,6 +40,7 @@
  * @property {boolean} autoRunOnNewTabs
  * @property {string} autoRunTiming
  * @property {boolean} autoCloseOnStart
+ * @property {number} autoRunPendingIntervalMin
  * @property {string[]} allowedOrigins
  * @property {boolean} filtersEnabled
  * @property {Filters} filters

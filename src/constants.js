@@ -39,6 +39,7 @@ export const DEFAULT_SETTINGS = {
   autoRunOnNewTabs: false,
   autoRunTiming: "start",
   autoCloseOnStart: false,
+  autoRunPendingIntervalMin: 5,
   // User-managed whitelist of sites (Chrome match patterns) for which the extension may request access at runtime
   allowedOrigins: [],
   filtersEnabled: false,

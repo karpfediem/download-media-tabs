@@ -47,17 +47,22 @@ let autoRunLoaded = false; // whether we have read the setting in this SW lifeti
 let autoRunTiming = "start";
 let autoCloseOnStart = false;
 let keepWindowOpenOnLastTabClose = false;
+let autoRunPendingIntervalMin = 5;
 const lastProcessedUrlByTab = new Map();
 const manualRetryByTabId = new Map();
 const PENDING_ALARM = "dmt-pending-tasks";
-const PENDING_INTERVAL_MIN = 5;
 
 function schedulePendingAlarm() {
-  if (!autoRunEnabled) {
+  if (!autoRunEnabled || autoRunPendingIntervalMin <= 0) {
     alarmsClear(PENDING_ALARM);
     return;
   }
-  alarmsCreate(PENDING_ALARM, { periodInMinutes: PENDING_INTERVAL_MIN });
+  const interval = Math.max(1, Math.min(120, Number(autoRunPendingIntervalMin) || 0));
+  if (!interval) {
+    alarmsClear(PENDING_ALARM);
+    return;
+  }
+  alarmsCreate(PENDING_ALARM, { periodInMinutes: interval });
 }
 
 async function refreshAutoRunSetting() {
@@ -66,16 +71,21 @@ async function refreshAutoRunSetting() {
       autoRunOnNewTabs: false,
       autoRunTiming: "start",
       autoCloseOnStart: false,
+      autoRunPendingIntervalMin: 5,
       keepWindowOpenOnLastTabClose: false
     });
     autoRunEnabled = !!obj.autoRunOnNewTabs;
     autoRunTiming = (obj.autoRunTiming === "start" || obj.autoRunTiming === "complete") ? obj.autoRunTiming : "start";
     autoCloseOnStart = !!obj.autoCloseOnStart;
+    autoRunPendingIntervalMin = Number.isFinite(Number(obj.autoRunPendingIntervalMin))
+      ? Number(obj.autoRunPendingIntervalMin)
+      : 5;
     keepWindowOpenOnLastTabClose = !!obj.keepWindowOpenOnLastTabClose;
   } catch {
     autoRunEnabled = false;
     autoRunTiming = "start";
     autoCloseOnStart = false;
+    autoRunPendingIntervalMin = 5;
     keepWindowOpenOnLastTabClose = false;
   } finally {
     autoRunLoaded = true;
@@ -201,6 +211,11 @@ addStorageOnChangedListener((changes, area) => {
   }
   if (Object.prototype.hasOwnProperty.call(changes, 'autoCloseOnStart')) {
     autoCloseOnStart = !!changes.autoCloseOnStart.newValue;
+  }
+  if (Object.prototype.hasOwnProperty.call(changes, 'autoRunPendingIntervalMin')) {
+    const next = Number(changes.autoRunPendingIntervalMin.newValue);
+    autoRunPendingIntervalMin = Number.isFinite(next) ? next : 5;
+    schedulePendingAlarm();
   }
   if (Object.prototype.hasOwnProperty.call(changes, 'keepWindowOpenOnLastTabClose')) {
     keepWindowOpenOnLastTabClose = !!changes.keepWindowOpenOnLastTabClose.newValue;
