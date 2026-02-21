@@ -65,6 +65,14 @@ export async function clearDownloadTabMapping(downloadId) {
   await persistState();
 }
 
+export function hasActiveDownloadForTab(tabId) {
+  if (typeof tabId !== "number") return false;
+  for (const meta of downloadIdToMeta.values()) {
+    if (meta && meta.tabId === tabId) return true;
+  }
+  return false;
+}
+
 export async function setPendingSizeConstraint(downloadId, payload) {
   if (typeof downloadId !== "number" || !payload || typeof payload !== "object") return;
   pendingSizeConstraints.set(downloadId, payload);

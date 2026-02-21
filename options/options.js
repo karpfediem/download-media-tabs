@@ -642,6 +642,23 @@ function formatTaskTime(ts) {
     try { return new Date(ts).toLocaleString(); } catch { return ""; }
 }
 
+function formatTaskReason(task) {
+    const code = String(task?.lastError || "").trim();
+    if (!code) return "";
+    const map = {
+        "filtered": "Filtered by settings",
+        "no-site-access": "Missing site access",
+        "probe-failed": "Probe failed",
+        "no-download": "Download did not start",
+        "size-filter": "Blocked by size filter",
+        "duplicate": "Duplicate URL (skipped)",
+        "tab-closed": "Tab closed",
+        "interrupted": "Download interrupted",
+        "no-tab": "Tab no longer exists"
+    };
+    return map[code] || code;
+}
+
 function taskMatchesFilters(task, status, text) {
     if (!task) return false;
     if (status && status !== "all" && task.status !== status) return false;
@@ -683,7 +700,17 @@ async function renderTasks() {
         label.textContent = task.status || "";
         statusWrap.appendChild(dot);
         statusWrap.appendChild(label);
+        const meta = document.createElement("div");
+        meta.className = "task-meta";
+        const kind = task.kind ? String(task.kind) : "";
+        const reason = formatTaskReason(task);
+        if (reason) {
+            meta.textContent = `${reason}${kind ? ` · ${kind}` : ""}`;
+        } else if (kind) {
+            meta.textContent = kind;
+        }
         tdStatus.appendChild(statusWrap);
+        if (meta.textContent) tdStatus.appendChild(meta);
         const tdUrl = document.createElement("td");
         tdUrl.className = "url";
         tdUrl.textContent = task.url || "";

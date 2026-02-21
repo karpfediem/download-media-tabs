@@ -6,8 +6,27 @@ import { probeDocument } from './probe.js';
 export async function decideTab(tab, settings) {
   const url = tab.url || "";
   const canProbe = await canProbeUrl(url);
-  const strict = !!settings.strictSingleDetection && canProbe;
 
+  const base = decideFromProbe({ url, settings, canProbe, probeResult: null });
+  if (base && base.reason !== "probe-needed") return base;
+
+  if (!canProbe) return { shouldDownload: false, reason: "no-site-access" };
+
+  try {
+    const [{ result }] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: probeDocument,
+      args: [!!settings.strictSingleDetection, Number(settings.coverageThreshold) || 0.5]
+    });
+    if (!result) return { shouldDownload: false, reason: "probe-failed" };
+    return decideFromProbe({ url, settings, canProbe, probeResult: result });
+  } catch {
+    return { shouldDownload: false, reason: "probe-failed" };
+  }
+}
+
+export function decideFromProbe({ url, settings, canProbe, probeResult }) {
+  const strict = !!settings.strictSingleDetection && canProbe;
   const f = Object.assign({}, settings.filters || {});
   const needDims = !!settings.filtersEnabled && hasActiveDimensionRules(f);
 
@@ -23,6 +42,12 @@ export async function decideTab(tab, settings) {
     hasAnySubstring(url, settings.triggerUrlSubstrings);
   const bypassFilters = !!settings.triggerBypassFilters && triggerMatched;
   const mediaExt = (ext && MEDIA_EXTENSION_SET.has(ext)) ? ext : (hintedExt && MEDIA_EXTENSION_SET.has(hintedExt) ? hintedExt : null);
+
+  const needsProbe = () => ({
+    shouldDownload: false,
+    reason: canProbe ? "probe-needed" : "no-site-access"
+  });
+
   if (triggerMatched) {
     if (!needDims || bypassFilters) {
       return {
@@ -37,29 +62,18 @@ export async function decideTab(tab, settings) {
         imageHeight: undefined
       };
     }
-    try {
-      if (!canProbe) {
-        return { shouldDownload: false, reason: "no-site-access" };
-      }
-      const [{ result }] = await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        func: probeDocument,
-        args: [strict, Number(settings.coverageThreshold) || 0.5]
-      });
-      return {
-        shouldDownload: true,
-        downloadUrl: url,
-        suggestedExt: mediaExt || hintedExt || undefined,
-        baseName: lastPathSegment(url),
-        mimeFromProbe: result?.contentType || "",
-        bypassFilters,
-        triggered: true,
-        imageWidth: result?.imageWidth,
-        imageHeight: result?.imageHeight
-      };
-    } catch {
-      return { shouldDownload: false, reason: "probe-failed" };
-    }
+    if (!probeResult) return needsProbe();
+    return {
+      shouldDownload: true,
+      downloadUrl: url,
+      suggestedExt: mediaExt || hintedExt || undefined,
+      baseName: lastPathSegment(url),
+      mimeFromProbe: probeResult?.contentType || "",
+      bypassFilters,
+      triggered: true,
+      imageWidth: probeResult?.imageWidth,
+      imageHeight: probeResult?.imageHeight
+    };
   }
 
   const chosenExt = mediaExt;
@@ -67,28 +81,20 @@ export async function decideTab(tab, settings) {
     const mime = MEDIA_EXTENSIONS.get(chosenExt) || "";
     if (isMimeIncluded(mime, settings)) {
       if (strict) {
-        try {
-          const [{ result }] = await chrome.scripting.executeScript({
-            target: { tabId: tab.id },
-            func: probeDocument,
-            args: [strict, Number(settings.coverageThreshold) || 0.5]
-          });
-          if (result && result.single) {
-            const chosen = absolutePrefer(result.src, result.href);
-            return {
-              shouldDownload: true,
-              downloadUrl: chosen,
-              suggestedExt: chosenExt,
-              baseName: lastPathSegment(chosen) || lastPathSegment(url) || "file",
-              mimeFromProbe: result.contentType || mime,
-              imageWidth: result.imageWidth,
-              imageHeight: result.imageHeight
-            };
-          }
-          return { shouldDownload: false };
-        } catch {
-          return { shouldDownload: false, reason: "probe-failed" };
+        if (!probeResult) return needsProbe();
+        if (probeResult && probeResult.single) {
+          const chosen = absolutePrefer(probeResult.src, probeResult.href);
+          return {
+            shouldDownload: true,
+            downloadUrl: chosen,
+            suggestedExt: chosenExt,
+            baseName: lastPathSegment(chosen) || lastPathSegment(url) || "file",
+            mimeFromProbe: probeResult.contentType || mime,
+            imageWidth: probeResult.imageWidth,
+            imageHeight: probeResult.imageHeight
+          };
         }
+        return { shouldDownload: false };
       }
       if (!needDims) {
         return {
@@ -101,29 +107,18 @@ export async function decideTab(tab, settings) {
           imageHeight: undefined
         };
       }
-      if (!canProbe) {
-        return { shouldDownload: false, reason: "no-site-access" };
-      }
-      try {
-        const [{ result }] = await chrome.scripting.executeScript({
-          target: { tabId: tab.id },
-          func: probeDocument,
-          args: [strict, Number(settings.coverageThreshold) || 0.5]
-        });
-        if (result && (result.single || /^(image)\//i.test(result.contentType))) {
-          const chosen = absolutePrefer(result.src, result.href);
-          return {
-            shouldDownload: true,
-            downloadUrl: chosen,
-            suggestedExt: chosenExt,
-            baseName: lastPathSegment(chosen) || lastPathSegment(url) || "file",
-            mimeFromProbe: result.contentType || mime,
-            imageWidth: result.imageWidth,
-            imageHeight: result.imageHeight
-          };
-        }
-      } catch {
-        return { shouldDownload: false, reason: "probe-failed" };
+      if (!probeResult) return needsProbe();
+      if (probeResult && (probeResult.single || /^(image)\//i.test(probeResult.contentType))) {
+        const chosen = absolutePrefer(probeResult.src, probeResult.href);
+        return {
+          shouldDownload: true,
+          downloadUrl: chosen,
+          suggestedExt: chosenExt,
+          baseName: lastPathSegment(chosen) || lastPathSegment(url) || "file",
+          mimeFromProbe: probeResult.contentType || mime,
+          imageWidth: probeResult.imageWidth,
+          imageHeight: probeResult.imageHeight
+        };
       }
       return {
         shouldDownload: true,
@@ -137,55 +132,41 @@ export async function decideTab(tab, settings) {
     }
   }
 
-  if (!canProbe) {
-    return { shouldDownload: false, reason: "no-site-access" };
+  if (!probeResult) return needsProbe();
+
+  const { contentType, href, protocol, single, src, looksLikePdf, imageWidth, imageHeight } = probeResult;
+  if (protocol === "blob:") return { shouldDownload: false };
+
+  if (isMimeIncluded(contentType, settings)) {
+    const chosen = absolutePrefer(src, href);
+    return {
+      shouldDownload: true,
+      downloadUrl: chosen,
+      suggestedExt: extensionSuggestForMime(contentType),
+      baseName: lastPathSegment(chosen) || "file",
+      mimeFromProbe: contentType,
+      imageWidth,
+      imageHeight
+    };
   }
-  try {
-    const [{ result }] = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      func: probeDocument,
-      args: [strict, Number(settings.coverageThreshold) || 0.5]
-    });
 
-    if (!result) return { shouldDownload: false };
-
-    const { contentType, href, protocol, single, src, looksLikePdf, imageWidth, imageHeight } = result;
-
-    if (protocol === "blob:") return { shouldDownload: false };
-
-    if (isMimeIncluded(contentType, settings)) {
-      const chosen = absolutePrefer(src, href);
-      return {
-        shouldDownload: true,
-        downloadUrl: chosen,
-        suggestedExt: extensionSuggestForMime(contentType),
-        baseName: lastPathSegment(chosen) || "file",
-        mimeFromProbe: contentType,
-        imageWidth,
-        imageHeight
-      };
-    }
-
-    if (single || looksLikePdf) {
-      const chosen = absolutePrefer(src, href);
-      const hinted2 = (settings.inferExtensionFromUrl && allowedSet.size > 0)
-        ? inferExtensionFromUrlHints(chosen, allowedSet)
-        : null;
-      const inferExt = extFromUrl(chosen) ||
-        hinted2 ||
-        (looksLikePdf ? "pdf" : null);
-      return {
-        shouldDownload: true,
-        downloadUrl: chosen,
-        suggestedExt: inferExt || undefined,
-        baseName: lastPathSegment(chosen) || "file",
-        mimeFromProbe: contentType || (inferExt ? MEDIA_EXTENSIONS.get(inferExt) : ""),
-        imageWidth,
-        imageHeight
-      };
-    }
-  } catch {
-    return { shouldDownload: false, reason: "probe-failed" };
+  if (single || looksLikePdf) {
+    const chosen = absolutePrefer(src, href);
+    const hinted2 = (settings.inferExtensionFromUrl && allowedSet.size > 0)
+      ? inferExtensionFromUrlHints(chosen, allowedSet)
+      : null;
+    const inferExt = extFromUrl(chosen) ||
+      hinted2 ||
+      (looksLikePdf ? "pdf" : null);
+    return {
+      shouldDownload: true,
+      downloadUrl: chosen,
+      suggestedExt: inferExt || undefined,
+      baseName: lastPathSegment(chosen) || "file",
+      mimeFromProbe: contentType || (inferExt ? MEDIA_EXTENSIONS.get(inferExt) : ""),
+      imageWidth,
+      imageHeight
+    };
   }
 
   return { shouldDownload: false };

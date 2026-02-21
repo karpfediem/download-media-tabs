@@ -2,8 +2,9 @@
 // Now modularized into several focused modules for readability and maintenance.
 
 import { setDefaultContextMenus, installActionClick, installContextMenuClick } from './menus.js';
-import { runDownload, runDownloadForTab } from './downloadOrchestrator.js';
+import { runDownload, runTaskForTab } from './downloadOrchestrator.js';
 import { upsertTask, updateTask, getTasks, getTaskById, markTasksForClosedTab } from './tasksState.js';
+import { hasActiveDownloadForTab } from './downloadsState.js';
 import './downloadsState.js'; // side-effect: installs downloads onChanged listener
 
 // Initialize context menus on install/startup
@@ -57,14 +58,10 @@ async function refreshAutoRunSetting() {
 
 async function runAutoTaskForTab(tab, task, phase) {
   if (!tab || !tab.url) return;
-  const nextAttempts = Number(task.attempts || 0) + 1;
-  await updateTask(task.id, { status: "started", attempts: nextAttempts, lastAttemptAt: Date.now() });
-  let downloadId = null;
-  try { downloadId = await runDownloadForTab(tab, { closeOnStart: autoCloseOnStart }); } catch {}
-  if (typeof downloadId === "number") {
-    await updateTask(task.id, { downloadId });
-  } else {
-    const retryOnComplete = (phase === "start" && autoRunTiming === "start" && !autoCloseOnStart);
+  const retryOnComplete = (phase === "start" && autoRunTiming === "start" && !autoCloseOnStart);
+  try {
+    await runTaskForTab(tab, task.id, { closeOnStart: autoCloseOnStart, retryOnComplete });
+  } catch {
     await updateTask(task.id, {
       status: retryOnComplete ? "pending" : "failed",
       lastError: "no-download"
@@ -155,7 +152,11 @@ chrome.storage.onChanged.addListener((changes, area) => {
 chrome.tabs.onRemoved.addListener((tabId) => {
   lastProcessedUrlByTab.delete(tabId);
   manualRetryByTabId.delete(tabId);
-  try { markTasksForClosedTab(tabId); } catch {}
+  try {
+    if (!hasActiveDownloadForTab(tabId)) {
+      markTasksForClosedTab(tabId);
+    }
+  } catch {}
 });
 
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
