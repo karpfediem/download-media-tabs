@@ -6,6 +6,7 @@ import { runDownload, runTaskForTab } from './downloadOrchestrator.js';
 import { upsertTask, updateTask, getTasks, getTaskById, markTasksForClosedTab } from './tasksState.js';
 import { hasActiveDownloadForTab } from './downloadsState.js';
 import './downloadsState.js'; // side-effect: installs downloads onChanged listener
+import { isFileSchemeAllowed } from './fileAccess.js';
 
 // Initialize context menus on install/startup
 chrome.runtime.onInstalled.addListener((details) => {
@@ -75,7 +76,12 @@ async function handleAutoRun(tab, phase) {
   if (manualRetryByTabId.has(tab.id)) return;
   try {
     const u = new URL(tab.url);
-    if (!['http:', 'https:', 'file:', 'ftp:', 'data:'].includes(u.protocol)) return;
+    if (u.protocol === "file:") {
+      const allowed = await isFileSchemeAllowed();
+      if (!allowed) return;
+    } else if (!['http:', 'https:', 'ftp:', 'data:'].includes(u.protocol)) {
+      return;
+    }
   } catch { return; }
 
   const task = await upsertTask({ tabId: tab.id, url: tab.url, kind: "auto" });

@@ -2,6 +2,7 @@ import { MEDIA_EXTENSION_SET, MEDIA_EXTENSIONS, isMimeIncluded, extensionSuggest
 import { extFromUrl, lastPathSegment, absolutePrefer, inferExtensionFromUrlHints } from './urlUtils.js';
 import { hasActiveDimensionRules, hasAnySubstring } from './filters.js';
 import { probeDocument } from './probe.js';
+import { isFileSchemeAllowed } from './fileAccess.js';
 
 export async function decideTab(tab, settings) {
   const url = tab.url || "";
@@ -176,8 +177,11 @@ async function canProbeUrl(url) {
   try {
     if (!chrome.permissions || !chrome.permissions.contains) return false;
     const u = new URL(url || "");
-    if (!["http:", "https:", "file:", "ftp:"].includes(u.protocol)) return false;
-    const origin = (u.protocol === "file:") ? "file:///*" : `${u.origin}/*`;
+    if (u.protocol === "file:") {
+      return await isFileSchemeAllowed();
+    }
+    if (!["http:", "https:", "ftp:"].includes(u.protocol)) return false;
+    const origin = `${u.origin}/*`;
     return await new Promise(resolve => {
       chrome.permissions.contains({ origins: [origin] }, (ok) => resolve(!!ok));
     });

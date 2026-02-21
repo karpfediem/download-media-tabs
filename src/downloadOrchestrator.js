@@ -8,6 +8,7 @@ import { sizeWithin, headContentLength } from './headSize.js';
 import { decideTab } from './decide.js';
 import { setDownloadTabMapping, setPendingSizeConstraint } from './downloadsState.js';
 import { upsertTask, updateTask, getTaskById, removeTask } from './tasksState.js';
+import { isFileSchemeAllowed } from './fileAccess.js';
 
 // Internal helpers to reduce duplication and keep behavior consistent
 function planFromDecision(decision, settings, tabId) {
@@ -141,11 +142,13 @@ export async function runDownload({ mode }) {
   try { await ensureHostPermissionsFromWhitelist(settings); } catch {}
 
   const allTabs = await selectCandidateTabs(mode || "currentWindow");
+  const fileAccessAllowed = await isFileSchemeAllowed();
 
   const candidateTabs = allTabs.filter(t => {
     try {
       const u = new URL(t.url || "");
-      return ["http:", "https:", "file:", "ftp:", "data:"].includes(u.protocol);
+      if (u.protocol === "file:") return fileAccessAllowed;
+      return ["http:", "https:", "ftp:", "data:"].includes(u.protocol);
     } catch { return false; }
   });
   if (candidateTabs.length === 0) {
@@ -249,7 +252,12 @@ export async function runTaskForTab(tabOrId, taskId, opts = {}) {
   }
   try {
     const u = new URL(tab.url);
-    if (!["http:", "https:", "file:", "ftp:", "data:"].includes(u.protocol)) return;
+    if (u.protocol === "file:") {
+      const allowed = await isFileSchemeAllowed();
+      if (!allowed) return;
+    } else if (!["http:", "https:", "ftp:", "data:"].includes(u.protocol)) {
+      return;
+    }
   } catch { return; }
 
   if (taskId) {
