@@ -224,7 +224,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible{
 }
 .tasks-table th{ color:var(--ctp-subtext1); font-weight:650; }
 .tasks-table td.url{ word-break:break-all; }
-.tasks-table td.actions{ white-space:nowrap; display:flex; gap:6px; align-items:center; }
+.tasks-table td.actions{ white-space:nowrap; gap:6px; align-items:center; }
 button.task-btn{
     padding:4px 8px;
     border-radius:8px;
