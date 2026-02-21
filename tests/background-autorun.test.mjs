@@ -191,4 +191,29 @@ async function tick() {
   assert.equal(tasks[0].downloadId > 0, true);
 }
 
+// 4) missing site access removes auto task (no-site-access skip)
+{
+  const env = createChromeStub({
+    sync: { autoRunOnNewTabs: true, autoRunTiming: "start", autoCloseOnStart: false, strictSingleDetection: true },
+    permissionsOk: false,
+    executeScriptThrows: false
+  });
+  await resetTasksStorage();
+  resetDownloadsState(downloadsState);
+  await importBackground("auto-no-access");
+  await tick();
+
+  const tab = { id: 5, url: "https://example.com/noaccess", status: "loading", windowId: 1 };
+  env.tabsById.set(5, tab);
+  await withMutedConsole(async () => {
+    for (const fn of env.listeners.tabsUpdated) {
+      await fn(5, { status: "loading" }, tab);
+    }
+  });
+
+  const tasks = await tasksState.getTasks();
+  assert.equal(env.calls.downloads.length, 0);
+  assert.equal(tasks.length, 0);
+}
+
 console.log("background-autorun.test.mjs passed");
