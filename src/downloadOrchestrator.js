@@ -50,7 +50,7 @@ async function startDownloadWithBookkeeping(p, settings, batchDate, hasSizeRule,
   return downloadId;
 }
 
-async function ensureHostPermissionsFromWhitelist(settings) {
+async function hasHostPermissionsForWhitelist(settings) {
   try {
     const patterns = Array.isArray(settings.allowedOrigins) ? settings.allowedOrigins.filter(Boolean) : [];
     if (!patterns.length) return false;
@@ -115,8 +115,8 @@ export async function runDownload({ mode }) {
   const settings = await getSettings();
   const closeOnStart = !!settings.autoCloseOnStart;
 
-  // Attempt to acquire optional host permissions as per user whitelist
-  try { await ensureHostPermissionsFromWhitelist(settings); } catch {}
+  // Check optional host permissions as per user whitelist
+  try { await hasHostPermissionsForWhitelist(settings); } catch {}
 
   const allTabs = await selectCandidateTabs(mode || "currentWindow");
   const fileAccessAllowed = await isFileSchemeAllowed();
@@ -214,8 +214,8 @@ export async function runTaskForTab(tabOrId, taskId, opts = {}) {
   const closeOnStart = !!opts.closeOnStart;
   const retryOnComplete = !!opts.retryOnComplete;
 
-  // Attempt to acquire optional host permissions as per user whitelist (autorun path)
-  try { await ensureHostPermissionsFromWhitelist(settings); } catch {}
+  // Check optional host permissions as per user whitelist (autorun path)
+  try { await hasHostPermissionsForWhitelist(settings); } catch {}
   let tab = tabOrId;
   if (typeof tabOrId === 'number') {
     try { tab = await chrome.tabs.get(tabOrId); } catch { return; }
