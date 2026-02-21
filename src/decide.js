@@ -71,6 +71,30 @@ export async function decideTab(tab, settings) {
   if (chosenExt) {
     const mime = MEDIA_EXTENSIONS.get(chosenExt) || "";
     if (isMimeIncluded(mime, settings)) {
+      if (settings.strictSingleDetection) {
+        try {
+          const [{ result }] = await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            func: probeDocument,
+            args: [!!settings.strictSingleDetection, Number(settings.coverageThreshold) || 0.5]
+          });
+          if (result && result.single) {
+            const chosen = absolutePrefer(result.src, result.href);
+            return {
+              shouldDownload: true,
+              downloadUrl: chosen,
+              suggestedExt: chosenExt,
+              baseName: lastPathSegment(chosen) || lastPathSegment(url) || "file",
+              mimeFromProbe: result.contentType || mime,
+              imageWidth: result.imageWidth,
+              imageHeight: result.imageHeight
+            };
+          }
+          return { shouldDownload: false };
+        } catch {
+          return { shouldDownload: false };
+        }
+      }
       if (!needDims) {
         return {
           shouldDownload: true,
