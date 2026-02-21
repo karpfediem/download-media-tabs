@@ -24,6 +24,7 @@ import {
   tabsGet,
   storageLocalSet
 } from './chromeApi.js';
+import { failureUpdate } from './taskStatus.js';
 
 async function startDownloadWithBookkeeping(p, settings, batchDate, hasSizeRule, f, closeOnStart = false) {
   const filename = buildFilename(settings.filenamePattern, {
@@ -92,19 +93,14 @@ async function startDownloadForPlan(plan, settings, batchDate, closeOnStart = fa
   return { ok: true, downloadId };
 }
 
-function shouldSkipTask(reason) {
-  return reason === REASONS.FILTERED || reason === REASONS.SIZE_FILTER;
-}
-
 async function finalizeTaskFailure(taskId, reason, { retryOnComplete = false } = {}) {
   if (!taskId) return;
-  if (shouldSkipTask(reason)) {
+  const action = failureUpdate(reason, { retryOnComplete });
+  if (action.action === "remove") {
     await removeTask(taskId);
     return;
   }
-  const status = retryOnComplete ? "pending" : "failed";
-  const lastError = retryOnComplete ? REASONS.NO_DOWNLOAD : (reason || REASONS.NO_DOWNLOAD);
-  await updateTask(taskId, { status, lastError });
+  await updateTask(taskId, { status: action.status, lastError: action.lastError });
 }
 
 async function saveRunTrace(trace) {

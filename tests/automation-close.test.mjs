@@ -3,6 +3,7 @@ import { createStorageFixture, createDownloadsStub, createTabsStub, createChrome
 import { resetTasksStorage, createTaskWithDownloadId } from "./helpers/tasks-helpers.mjs";
 import { setupPostDownloadSizeConstraint } from "./helpers/size-filter-helpers.mjs";
 import { resetDownloadsState } from "./helpers/downloads-state-helpers.mjs";
+import { withMutedConsole } from "./helpers/console-mute.mjs";
 
 const onChangedListener = ref(null);
 let currentTabs = [];
@@ -87,7 +88,9 @@ const { runDownload } = await import("../src/downloadOrchestrator.js");
   tabsById.set(1, tab1);
   tabsById.set(2, tab2);
 
-  await runDownload({ mode: "currentWindow" });
+  await withMutedConsole(async () => {
+    await runDownload({ mode: "currentWindow" });
+  });
   assert.deepEqual(removedTabs, [2]);
 }
 

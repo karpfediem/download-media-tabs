@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createStorageFixture, createDownloadsStub, createTabsStub, createChromeBase, ref } from "./helpers/chrome-stubs.mjs";
 import { resetTasksStorage } from "./helpers/tasks-helpers.mjs";
 import { resetDownloadsState } from "./helpers/downloads-state-helpers.mjs";
+import { withMutedConsole } from "./helpers/console-mute.mjs";
 
 const tasksState = await import("../src/tasksState.js");
 const downloadsState = await import("../src/downloadsState.js");
@@ -118,9 +119,11 @@ async function tick() {
 
   const tab = { id: 1, url: "https://example.com/file.jpg", status: "loading", windowId: 1 };
   env.tabsById.set(1, tab);
-  for (const fn of env.listeners.tabsUpdated) {
-    await fn(1, { status: "loading" }, tab);
-  }
+  await withMutedConsole(async () => {
+    for (const fn of env.listeners.tabsUpdated) {
+      await fn(1, { status: "loading" }, tab);
+    }
+  });
 
   const tasks = await tasksState.getTasks();
   assert.equal(env.calls.downloads.length, 1);
@@ -142,9 +145,11 @@ async function tick() {
 
   const tab = { id: 2, url: "https://example.com/file.jpg", status: "loading", windowId: 1 };
   env.tabsById.set(2, tab);
-  for (const fn of env.listeners.tabsUpdated) {
-    await fn(2, { status: "loading" }, tab);
-  }
+  await withMutedConsole(async () => {
+    for (const fn of env.listeners.tabsUpdated) {
+      await fn(2, { status: "loading" }, tab);
+    }
+  });
 
   const tasks = await tasksState.getTasks();
   assert.equal(env.calls.downloads.length, 0);
@@ -175,9 +180,11 @@ async function tick() {
   const created = env.calls.tabsCreate[0];
   const completeTab = { ...created, status: "complete" };
   env.tabsById.set(created.id, completeTab);
-  for (const fn of env.listeners.tabsUpdated) {
-    await fn(created.id, { status: "complete" }, completeTab);
-  }
+  await withMutedConsole(async () => {
+    for (const fn of env.listeners.tabsUpdated) {
+      await fn(created.id, { status: "complete" }, completeTab);
+    }
+  });
 
   const tasks = await tasksState.getTasks();
   assert.equal(env.calls.downloads.length, 1);

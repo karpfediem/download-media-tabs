@@ -3,6 +3,7 @@ import { runDownload } from "../src/downloadOrchestrator.js";
 import { DEFAULT_SETTINGS } from "../src/constants.js";
 import { setupRunDownloadFixture } from "./helpers/run-download-fixture.mjs";
 import { contentLengthForUrlFromMap } from "./helpers/size-filter-helpers.mjs";
+import { withMutedConsole } from "./helpers/console-mute.mjs";
 
 const tabs = [
   { id: 1, url: "https://blocked.com/a.jpg", windowId: 1 },
@@ -30,7 +31,9 @@ const { storage } = setupRunDownloadFixture({
   contentLengthForUrl: contentLengthForUrlFromMap(lengthMap, 1000)
 });
 
-await runDownload({ mode: "currentWindow" });
+await withMutedConsole(async () => {
+  await runDownload({ mode: "currentWindow" });
+});
 
 const trace = storage.local.dmtLastRunTrace;
 assert.equal(Boolean(trace), true);
