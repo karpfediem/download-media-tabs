@@ -34,7 +34,7 @@ export const DEFAULT_SETTINGS = {
   downloadConcurrency: 6,
   // New behavior: when enabled, auto-run on each new tab as it finishes loading
   autoRunOnNewTabs: false,
-  autoRunTiming: "complete",
+  autoRunTiming: "start",
   autoCloseOnStart: false,
   // User-managed whitelist of sites (Chrome match patterns) for which the extension may request access at runtime
   allowedOrigins: [],

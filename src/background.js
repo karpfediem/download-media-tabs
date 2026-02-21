@@ -29,7 +29,7 @@ installContextMenuClick(runDownload);
 // Auto-run on new tabs if enabled in settings
 let autoRunEnabled = false;
 let autoRunLoaded = false; // whether we have read the setting in this SW lifetime
-let autoRunTiming = "complete";
+let autoRunTiming = "start";
 let autoCloseOnStart = false;
 let keepWindowOpenOnLastTabClose = false;
 const lastProcessedUrlByTab = new Map();
@@ -39,17 +39,17 @@ async function refreshAutoRunSetting() {
   try {
     const obj = await chrome.storage.sync.get({
       autoRunOnNewTabs: false,
-      autoRunTiming: "complete",
+      autoRunTiming: "start",
       autoCloseOnStart: false,
       keepWindowOpenOnLastTabClose: false
     });
     autoRunEnabled = !!obj.autoRunOnNewTabs;
-    autoRunTiming = (obj.autoRunTiming === "start" || obj.autoRunTiming === "complete") ? obj.autoRunTiming : "complete";
+    autoRunTiming = (obj.autoRunTiming === "start" || obj.autoRunTiming === "complete") ? obj.autoRunTiming : "start";
     autoCloseOnStart = !!obj.autoCloseOnStart;
     keepWindowOpenOnLastTabClose = !!obj.keepWindowOpenOnLastTabClose;
   } catch {
     autoRunEnabled = false;
-    autoRunTiming = "complete";
+    autoRunTiming = "start";
     autoCloseOnStart = false;
     keepWindowOpenOnLastTabClose = false;
   } finally {
