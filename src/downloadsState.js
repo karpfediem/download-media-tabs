@@ -1,6 +1,6 @@
 import { getSettings } from './settings.js';
 import { closeTabRespectingWindow } from './closeTab.js';
-import { updateTaskByDownloadId } from './tasksState.js';
+import { updateTaskByDownloadId, removeTaskByDownloadId } from './tasksState.js';
 
 const SESSION_KEY = "dmtDownloadState";
 
@@ -97,6 +97,7 @@ chrome.downloads.onChanged.addListener(async (delta) => {
     const rec = delta.bytesReceived.current;
     if (maxBytes > 0 && rec > maxBytes) {
       try { await chrome.downloads.cancel(id); } catch {}
+      await removeTaskByDownloadId(id);
       await clearPendingSizeConstraint(id);
       await clearDownloadTabMapping(id);
       return;
@@ -109,6 +110,7 @@ chrome.downloads.onChanged.addListener(async (delta) => {
     if (total >= 0) {
       if ((minBytes > 0 && total < minBytes) || (maxBytes > 0 && total > maxBytes)) {
         try { await chrome.downloads.cancel(id); } catch {}
+        await removeTaskByDownloadId(id);
         await clearPendingSizeConstraint(id);
         await clearDownloadTabMapping(id);
         return;
@@ -137,6 +139,7 @@ chrome.downloads.onChanged.addListener(async (delta) => {
         if (tooSmall || tooLarge) {
           try { await chrome.downloads.removeFile(id); } catch {}
           try { await chrome.downloads.erase({ id }); } catch {}
+          await removeTaskByDownloadId(id);
           await clearDownloadTabMapping(id);
           return;
         }

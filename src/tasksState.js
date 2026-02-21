@@ -83,6 +83,15 @@ export async function removeTask(id) {
   await saveTasks(filtered);
 }
 
+export async function removeTaskByDownloadId(downloadId) {
+  if (typeof downloadId !== "number") return;
+  const tasks = await getTasks();
+  const filtered = tasks.filter(t => t && t.downloadId !== downloadId);
+  if (filtered.length !== tasks.length) {
+    await saveTasks(filtered);
+  }
+}
+
 export async function markTasksForClosedTab(tabId) {
   if (typeof tabId !== "number") return;
   const tasks = await getTasks();
