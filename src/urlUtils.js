@@ -12,7 +12,9 @@ export function lastPathSegment(u) {
     const url = new URL(u);
     const p = url.pathname;
     if (!p || p === "/") return null;
-    const seg = p.split("/").pop();
+    const trimmed = p.replace(/\/+$/, "");
+    if (!trimmed) return null;
+    const seg = trimmed.split("/").pop();
     return seg || null;
   } catch {
     return null;
@@ -26,6 +28,41 @@ export function extFromUrl(u) {
   return m ? m[1].toLowerCase() : null;
 }
 
+export function inferExtensionFromUrlHints(u, extSet) {
+  if (!extSet || typeof extSet.has !== "function") return null;
+  let url;
+  try { url = new URL(u); } catch { return null; }
+
+  const pickToken = (value) => {
+    if (!value) return null;
+    const tokens = String(value).toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+    for (let i = tokens.length - 1; i >= 0; i--) {
+      const t = tokens[i];
+      if (extSet.has(t)) return t;
+    }
+    return null;
+  };
+
+  const preferredKeys = new Set([
+    "format", "fmt", "type", "ext", "extension", "filetype", "mime", "mimetype", "auto"
+  ]);
+
+  for (const [key, value] of url.searchParams.entries()) {
+    if (!preferredKeys.has(String(key).toLowerCase())) continue;
+    const ext = pickToken(value);
+    if (ext) return ext;
+  }
+
+  for (const [, value] of url.searchParams.entries()) {
+    const ext = pickToken(value);
+    if (ext) return ext;
+  }
+
+  const seg = lastPathSegment(url.toString());
+  const segExt = seg ? pickToken(seg) : null;
+  return segExt ? segExt : null;
+}
+
 export function hostFromUrl(u) {
   try { return new URL(u).host || "unknown-host"; } catch { return "unknown-host"; }
 }
@@ -36,7 +73,14 @@ export function buildFilename(pattern, ctx) {
   out = out.replaceAll("{YYYYMMDD-HHmmss}", stamp);
   out = out.replaceAll("{host}", sanitizeForPath(ctx.host));
   out = out.replaceAll("{basename}", sanitizeForPath(ctx.basename || "file"));
-  if (ctx.ext && !/\.[A-Za-z0-9]{1,8}$/.test(out)) out += `.${ctx.ext}`;
+  if (ctx.ext) {
+    const ext = String(ctx.ext || "").replace(/^\.+/, "");
+    if (ext) {
+      const esc = ext.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const hasSameExt = new RegExp(`\\.${esc}$`, "i").test(out);
+      if (!hasSameExt) out += `.${ext}`;
+    }
+  }
   return out;
 }
 

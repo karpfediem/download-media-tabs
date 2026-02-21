@@ -16,12 +16,14 @@ function planFromDecision(decision, settings, tabId) {
   const mime = (decision.mimeFromProbe && String(decision.mimeFromProbe).toLowerCase()) ||
     MEDIA_EXTENSIONS.get(ext) || '';
 
-  if (!isMimeIncluded(mime || (MEDIA_EXTENSIONS.get(ext) || ''), settings)) return null;
+  if (!decision.bypassFilters && !decision.triggered) {
+    if (!isMimeIncluded(mime || (MEDIA_EXTENSIONS.get(ext) || ''), settings)) return null;
+  }
 
   const filtersOn = !!settings.filtersEnabled;
   const f = Object.assign({}, DEFAULT_SETTINGS.filters, settings.filters || {});
 
-  if (filtersOn) {
+  if (filtersOn && !decision.bypassFilters) {
     const preVerdict = applyPreFilters({
       url: decision.downloadUrl,
       host,
@@ -39,6 +41,8 @@ function planFromDecision(decision, settings, tabId) {
     host,
     ext,
     mime,
+    bypassFilters: !!decision.bypassFilters,
+    triggered: !!decision.triggered,
     baseName: decision.baseName,
     width: decision.imageWidth,
     height: decision.imageHeight
@@ -52,6 +56,15 @@ async function startDownloadWithBookkeeping(p, settings, batchDate, hasSizeRule,
     basename: p.baseName || (lastPathSegment(p.url) || 'file'),
     ext: p.ext
   });
+  console.log("[Download Media Tabs] download plan", {
+    url: p.url,
+    host: p.host,
+    baseName: p.baseName,
+    ext: p.ext,
+    filename,
+    bypassFilters: !!p.bypassFilters,
+    triggered: !!p.triggered
+  });
   const downloadId = await chrome.downloads.download({
     url: p.url,
     filename,
@@ -61,7 +74,7 @@ async function startDownloadWithBookkeeping(p, settings, batchDate, hasSizeRule,
 
   if (typeof downloadId === 'number') {
     if (p.tabId != null) downloadIdToTabId.set(downloadId, p.tabId);
-    if (hasSizeRule && p.postSizeEnforce) {
+    if (hasSizeRule && !p.bypassFilters && p.postSizeEnforce) {
       pendingSizeConstraints.set(downloadId, { minBytes: f.minBytes, maxBytes: f.maxBytes });
     }
   }
@@ -136,6 +149,7 @@ export async function runDownload({ mode }) {
   if (hasSizeRule) {
     const limitHead = pLimit(Math.max(1, settings.probeConcurrency | 0));
     const headResults = await Promise.allSettled(plans.map(p => limitHead(async () => {
+      if (p.bypassFilters) return { known: false, ok: true, bypass: true };
       const bytes = await headContentLength(p.url, 15000);
       if (bytes == null || bytes < 0) return { known: false, ok: true };
       const ok = sizeWithin(bytes, f.minBytes, f.maxBytes);
@@ -147,7 +161,7 @@ export async function runDownload({ mode }) {
       const plan = plans[i];
       const r = headResults[i];
       if (r.status !== "fulfilled") {
-        plan.postSizeEnforce = true;
+        if (!plan.bypassFilters) plan.postSizeEnforce = true;
         filtered.push(plan);
         continue;
       }
@@ -156,7 +170,7 @@ export async function runDownload({ mode }) {
         if (!ok) continue;
         filtered.push(plan);
       } else {
-        plan.postSizeEnforce = true;
+        if (!plan.bypassFilters) plan.postSizeEnforce = true;
         filtered.push(plan);
       }
     }
@@ -208,7 +222,7 @@ export async function runDownloadForTab(tabOrId) {
   if (!plan) return;
 
   // Optional HEAD size check
-  if (hasSizeRule) {
+  if (hasSizeRule && !plan.bypassFilters) {
     try {
       const bytes = await headContentLength(plan.url, 15000);
       if (bytes == null || bytes < 0) {

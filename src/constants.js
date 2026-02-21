@@ -1,3 +1,18 @@
+export const MEDIA_EXTENSIONS = new Map([
+  ["jpg", "image/jpeg"], ["jpeg", "image/jpeg"], ["jpe", "image/jpeg"],
+  ["png", "image/png"], ["gif", "image/gif"], ["webp", "image/webp"],
+  ["bmp", "image/bmp"], ["tif", "image/tiff"], ["tiff", "image/tiff"],
+  ["svg", "image/svg+xml"], ["avif", "image/avif"],
+  ["mp4", "video/mp4"], ["m4v", "video/x-m4v"], ["mov", "video/quicktime"],
+  ["webm", "video/webm"], ["mkv", "video/x-matroska"], ["avi", "video/x-msvideo"],
+  ["ogv", "video/ogg"],
+  ["mp3", "audio/mpeg"], ["m4a", "audio/mp4"], ["aac", "audio/aac"],
+  ["flac", "audio/flac"], ["wav", "audio/wav"], ["ogg", "audio/ogg"], ["oga", "audio/ogg"],
+  ["pdf", "application/pdf"]
+]);
+export const MEDIA_EXTENSION_SET = new Set([...MEDIA_EXTENSIONS.keys()]);
+export const IMAGE_EXTENSION_SET = new Set(["jpg","jpeg","jpe","png","gif","webp","bmp","tif","tiff","svg","avif"]);
+
 // Constants and MIME/extension helpers
 export const DEFAULT_SETTINGS = {
   includeImages: true,
@@ -11,6 +26,10 @@ export const DEFAULT_SETTINGS = {
   keepWindowOpenOnLastTabClose: false,
   strictSingleDetection: true,
   coverageThreshold: 0.5,
+  inferExtensionFromUrl: true,
+  inferUrlAllowedExtensions: [...MEDIA_EXTENSION_SET],
+  triggerUrlSubstrings: [],
+  triggerBypassFilters: false,
   probeConcurrency: 8,
   downloadConcurrency: 6,
   // New behavior: when enabled, auto-run on each new tab as it finishes loading
@@ -37,21 +56,6 @@ export const DEFAULT_SETTINGS = {
     excludeUrlSubstrings: []
   }
 };
-
-export const MEDIA_EXTENSIONS = new Map([
-  ["jpg", "image/jpeg"], ["jpeg", "image/jpeg"], ["jpe", "image/jpeg"],
-  ["png", "image/png"], ["gif", "image/gif"], ["webp", "image/webp"],
-  ["bmp", "image/bmp"], ["tif", "image/tiff"], ["tiff", "image/tiff"],
-  ["svg", "image/svg+xml"], ["avif", "image/avif"],
-  ["mp4", "video/mp4"], ["m4v", "video/x-m4v"], ["mov", "video/quicktime"],
-  ["webm", "video/webm"], ["mkv", "video/x-matroska"], ["avi", "video/x-msvideo"],
-  ["ogv", "video/ogg"],
-  ["mp3", "audio/mpeg"], ["m4a", "audio/mp4"], ["aac", "audio/aac"],
-  ["flac", "audio/flac"], ["wav", "audio/wav"], ["ogg", "audio/ogg"], ["oga", "audio/ogg"],
-  ["pdf", "application/pdf"]
-]);
-export const MEDIA_EXTENSION_SET = new Set([...MEDIA_EXTENSIONS.keys()]);
-export const IMAGE_EXTENSION_SET = new Set(["jpg","jpeg","jpe","png","gif","webp","bmp","tif","tiff","svg","avif"]);
 
 export function isMimeIncluded(mime, s) {
   if (!mime || typeof mime !== "string") return false;

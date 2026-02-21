@@ -10,6 +10,7 @@ Scope: The extension targets single‑media tabs only — pages that display exa
 - Filters: media types, file size, image dimensions/megapixels, domain allow/deny, extensions, MIME patterns, URL substrings
 - Post‑actions: close tab after download; keep window open if it would close on its last tab
 - Tunable probe/download concurrency
+- Optional URL-hint extension inference for attachment links without file extensions
 
 ## Getting started (developers)
 1. Clone or download this repository.

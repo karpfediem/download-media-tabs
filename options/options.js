@@ -110,6 +110,14 @@ function sanitizeSettingsInput(input) {
     // Detection
     sanitized.strictSingleDetection = cfg.strictSingleDetection !== false;
     sanitized.coverageThreshold = clampFloat(cfg.coverageThreshold, 0, 1, DEFAULTS.coverageThreshold);
+    sanitized.inferExtensionFromUrl = cfg.inferExtensionFromUrl !== false;
+    sanitized.inferUrlAllowedExtensions = Array.isArray(cfg.inferUrlAllowedExtensions)
+        ? normalizeExtList(cfg.inferUrlAllowedExtensions)
+        : normalizeExtList(DEFAULTS.inferUrlAllowedExtensions || []);
+    sanitized.triggerUrlSubstrings = Array.isArray(cfg.triggerUrlSubstrings)
+        ? cfg.triggerUrlSubstrings.map(v => String(v || "").trim()).filter(Boolean)
+        : [];
+    sanitized.triggerBypassFilters = !!cfg.triggerBypassFilters;
 
     // Automation
     sanitized.autoRunOnNewTabs = !!cfg.autoRunOnNewTabs;
@@ -245,6 +253,10 @@ function load() {
         // Detection
         $("strictSingleDetection").checked = safeCfg.strictSingleDetection !== false;
         $("coverageThreshold").value = clampFloat(safeCfg.coverageThreshold, 0, 1, DEFAULTS.coverageThreshold);
+        $("inferExtensionFromUrl").checked = safeCfg.inferExtensionFromUrl !== false;
+        $("inferUrlAllowedExtensions").value = (safeCfg.inferUrlAllowedExtensions || []).join("\n");
+        $("triggerUrlSubstrings").value = (safeCfg.triggerUrlSubstrings || []).join("\n");
+        $("triggerBypassFilters").checked = !!safeCfg.triggerBypassFilters;
 
         // Automation
         $("autoRunOnNewTabs").checked = !!safeCfg.autoRunOnNewTabs;
@@ -319,6 +331,10 @@ function buildConfigFromUI() {
         // Detection
         strictSingleDetection: $("strictSingleDetection").checked,
         coverageThreshold: clampFloat($("coverageThreshold").value, 0, 1, DEFAULTS.coverageThreshold),
+        inferExtensionFromUrl: $("inferExtensionFromUrl").checked,
+        inferUrlAllowedExtensions: normalizeExtList(linesToArray($("inferUrlAllowedExtensions").value)),
+        triggerUrlSubstrings: linesToArray($("triggerUrlSubstrings").value, { trim: true, lower: false }),
+        triggerBypassFilters: $("triggerBypassFilters").checked,
 
         // Performance
         probeConcurrency: clampInt($("probeConcurrency").value, 1, 32, DEFAULTS.probeConcurrency),
@@ -427,6 +443,8 @@ function pickSettingsOnly(obj) {
         'scope','filenamePattern','theme','allowedOrigins',
         'includeImages','includeVideo','includeAudio','includePdf',
         'strictSingleDetection','coverageThreshold',
+        'inferExtensionFromUrl',
+        'inferUrlAllowedExtensions','triggerUrlSubstrings','triggerBypassFilters',
         'probeConcurrency','downloadConcurrency',
         'autoRunOnNewTabs',
         'closeTabAfterDownload','keepWindowOpenOnLastTabClose',
@@ -640,6 +658,12 @@ document.addEventListener("DOMContentLoaded", () => {
         if (id === "exportSettings") exportSettings();
         if (id === "importSettings") $("importFile").click();
         if (id === "savePreset") saveCurrentAsPreset();
+        if (id === "resetInferUrlAllowedExtensions") {
+            $("inferUrlAllowedExtensions").value = (DEFAULTS.inferUrlAllowedExtensions || []).join("\n");
+            updateSaveEnabled();
+            showToast("URL-hint extensions reset to defaults.", 'success', 1400);
+            return;
+        }
         if (id === "requestHostPerms") {
             // Request optional host permissions for the current whitelist
             const patterns = normalizeMatchPatterns(linesToArray($("allowedOrigins").value, { trim: true, lower: false }));

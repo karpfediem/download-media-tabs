@@ -209,7 +209,10 @@
                     <section id="fs-domain">
                         <h3 class="h3">Domain allow/deny</h3>
                         <div class="grid2">
-                            <label>Allowed domains (one per line)
+                            <label>
+                                <div class="label-row">
+                                    <span>Allowed domains (one per line)</span>
+                                </div>
                                 <textarea id="allowedDomains" placeholder="example.com&#10;images.example.org"></textarea>
                             </label>
                             <label>Blocked domains (one per line)
@@ -222,17 +225,23 @@
                     <section id="fs-ext-mime">
                         <h3 class="h3">Extension &amp; MIME</h3>
                         <div class="grid2">
-                            <label>Allowed extensions (one per line)
+                            <div>
+                                <div class="label-row">
+                                    <label class="label-text" for="allowedExtensions">Allowed extensions (one per line)</label>
+                                </div>
                                 <textarea id="allowedExtensions" placeholder="jpg&#10;png&#10;mp4"></textarea>
-                            </label>
+                            </div>
                             <label>Blocked extensions (one per line)
                                 <textarea id="blockedExtensions" placeholder="gif&#10;svg"></textarea>
                             </label>
                         </div>
                         <div class="grid2">
-                            <label>Allowed MIME patterns (one per line)
+                            <div>
+                                <div class="label-row">
+                                    <label class="label-text" for="allowedMime">Allowed MIME patterns (one per line)</label>
+                                </div>
                                 <textarea id="allowedMime" placeholder="image/*&#10;video/mp4"></textarea>
-                            </label>
+                            </div>
                             <label>Blocked MIME patterns (one per line)
                                 <textarea id="blockedMime" placeholder="image/svg+xml"></textarea>
                             </label>
@@ -243,7 +252,10 @@
                     <section id="fs-url">
                         <h3 class="h3">URL substring filters</h3>
                         <div class="grid2">
-                            <label>Include if URL contains (one per line)
+                            <label>
+                                <div class="label-row">
+                                    <span>Include if URL contains (one per line)</span>
+                                </div>
                                 <textarea id="includeUrlSubstrings" placeholder="/photos/&#10;?download=true"></textarea>
                             </label>
                             <label>Exclude if URL contains (one per line)
@@ -286,6 +298,38 @@
                         In strict mode, a page qualifies only if it has exactly one media element, it is a direct child of <span class="kbd">&lt;body&gt;</span>,
                         and it covers the given fraction of the viewport.
                     </p>
+                </fieldset>
+
+                <fieldset>
+                    <legend>URL hints</legend>
+                    <p class="note">URL hints only help the extension <em>classify</em> a page as media when the URL is ambiguous (no extension or probing fails). They never force a download; the tab still has to pass normal media‑type checks and all filters.</p>
+                    <label><input type="checkbox" id="inferExtensionFromUrl"> Infer media extension from URL hints</label>
+                    <p class="note">When enabled, the extension tries to guess the media type from URL hints (query params like <span class="kbd">format=webp</span> or path tokens like <span class="kbd">-jpeg</span>) when there’s no file extension or probing can’t determine one.</p>
+                    <div class="row">
+                        <div>
+                            <div class="label-row">
+                                <label class="label-text" for="inferUrlAllowedExtensions">URL-hint allowed extensions (one per line)</label>
+                                <button id="resetInferUrlAllowedExtensions" class="icon-btn" type="button" title="Reset URL-hint extensions to defaults" aria-label="Reset URL-hint extensions to defaults">↺</button>
+                            </div>
+                            <textarea id="inferUrlAllowedExtensions" placeholder="jpg&#10;png&#10;webp"></textarea>
+                        </div>
+                    </div>
+                    <p class="note">Limits which extensions URL hints are allowed to resolve to. Remove items to disable them, or clear the list to disable hint-based guessing entirely.</p>
+                </fieldset>
+
+                <fieldset>
+                    <legend>URL triggers</legend>
+                    <p class="note">URL triggers <em>force</em> a download attempt when the URL contains one of your substrings. With bypass off, filters still apply (so the download can still be blocked). With bypass on, filters and media‑type checks are ignored.</p>
+                    <div class="row">
+                        <div>
+                            <div class="label-row">
+                                <label class="label-text" for="triggerUrlSubstrings">Download trigger URL substrings (one per line)</label>
+                            </div>
+                            <textarea id="triggerUrlSubstrings" placeholder=".keys&#10;/attachments/"></textarea>
+                        </div>
+                    </div>
+                    <label class="inline"><input type="checkbox" id="triggerBypassFilters"> Triggers bypass filters and media-type checks</label>
+                    <p class="note">Any match in the full URL triggers a download attempt. Use with care.</p>
                 </fieldset>
             </section>
 
