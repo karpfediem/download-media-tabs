@@ -271,6 +271,15 @@
                 <fieldset>
                     <legend>Auto-run</legend>
                     <label class="inline"><input type="checkbox" id="autoRunOnNewTabs"> Auto-download on new tabs (download single-media tabs as they load)</label>
+                    <div class="row">
+                        <label>Auto-run timing
+                            <select id="autoRunTiming">
+                                <option value="complete">After load completes</option>
+                                <option value="start">After load starts</option>
+                            </select>
+                        </label>
+                    </div>
+                    <label class="inline"><input type="checkbox" id="autoCloseOnStart"> Close tab immediately after download starts</label>
                     <p class="note">When enabled, as a new tab finishes loading, the extension will try to download it if it’s a direct single-media page. Respects all filters and post-actions.</p>
                 </fieldset>
                 <fieldset>

@@ -6,7 +6,7 @@ import { DEFAULT_SETTINGS, MEDIA_EXTENSIONS, isMimeIncluded } from './constants.
 import { applyPreFilters } from './filters.js';
 import { sizeWithin, headContentLength } from './headSize.js';
 import { decideTab } from './decide.js';
-import { downloadIdToTabId, pendingSizeConstraints } from './downloadsState.js';
+import { setDownloadTabMapping, setPendingSizeConstraint, pendingSizeConstraints } from './downloadsState.js';
 
 // Internal helpers to reduce duplication and keep behavior consistent
 function planFromDecision(decision, settings, tabId) {
@@ -73,9 +73,9 @@ async function startDownloadWithBookkeeping(p, settings, batchDate, hasSizeRule,
   }).catch(() => null);
 
   if (typeof downloadId === 'number') {
-    if (p.tabId != null) downloadIdToTabId.set(downloadId, p.tabId);
+    if (p.tabId != null) await setDownloadTabMapping(downloadId, p.tabId);
     if (hasSizeRule && !p.bypassFilters && p.postSizeEnforce) {
-      pendingSizeConstraints.set(downloadId, { minBytes: f.minBytes, maxBytes: f.maxBytes });
+      await setPendingSizeConstraint(downloadId, { minBytes: f.minBytes, maxBytes: f.maxBytes });
     }
   }
   return downloadId;
@@ -240,4 +240,5 @@ export async function runDownloadForTab(tabOrId) {
   if (typeof downloadId === 'number') {
     console.log("[Download Media Tabs] Started 1 download (auto-run)");
   }
+  return downloadId;
 }

@@ -1,8 +1,71 @@
 import { getSettings } from './settings.js';
 import { closeTabRespectingWindow } from './closeTab.js';
 
+const SESSION_KEY = "dmtDownloadState";
+
 export const downloadIdToTabId = new Map();
 export const pendingSizeConstraints = new Map();
+
+async function persistState() {
+  try {
+    const obj = {
+      downloadIdToTabId: Array.from(downloadIdToTabId.entries()),
+      pendingSizeConstraints: Array.from(pendingSizeConstraints.entries())
+    };
+    if (chrome.storage?.session) {
+      await chrome.storage.session.set({ [SESSION_KEY]: obj });
+    }
+  } catch {}
+}
+
+async function loadState() {
+  try {
+    if (!chrome.storage?.session) return;
+    const obj = await chrome.storage.session.get({ [SESSION_KEY]: null });
+    const data = obj && obj[SESSION_KEY];
+    if (!data) return;
+    if (Array.isArray(data.downloadIdToTabId)) {
+      for (const [id, tabId] of data.downloadIdToTabId) {
+        if (typeof id === "number" && typeof tabId === "number") {
+          downloadIdToTabId.set(id, tabId);
+        }
+      }
+    }
+    if (Array.isArray(data.pendingSizeConstraints)) {
+      for (const [id, payload] of data.pendingSizeConstraints) {
+        if (typeof id === "number" && payload && typeof payload === "object") {
+          pendingSizeConstraints.set(id, payload);
+        }
+      }
+    }
+  } catch {}
+}
+
+export async function setDownloadTabMapping(downloadId, tabId) {
+  if (typeof downloadId !== "number" || typeof tabId !== "number") return;
+  downloadIdToTabId.set(downloadId, tabId);
+  await persistState();
+}
+
+export async function clearDownloadTabMapping(downloadId) {
+  if (typeof downloadId !== "number") return;
+  downloadIdToTabId.delete(downloadId);
+  await persistState();
+}
+
+export async function setPendingSizeConstraint(downloadId, payload) {
+  if (typeof downloadId !== "number" || !payload || typeof payload !== "object") return;
+  pendingSizeConstraints.set(downloadId, payload);
+  await persistState();
+}
+
+export async function clearPendingSizeConstraint(downloadId) {
+  if (typeof downloadId !== "number") return;
+  pendingSizeConstraints.delete(downloadId);
+  await persistState();
+}
+
+try { loadState(); } catch {}
 
 chrome.downloads.onChanged.addListener(async (delta) => {
   if (!delta || typeof delta.id !== "number") return;
@@ -13,8 +76,8 @@ chrome.downloads.onChanged.addListener(async (delta) => {
     const rec = delta.bytesReceived.current;
     if (maxBytes > 0 && rec > maxBytes) {
       try { await chrome.downloads.cancel(id); } catch {}
-      pendingSizeConstraints.delete(id);
-      downloadIdToTabId.delete(id);
+      await clearPendingSizeConstraint(id);
+      await clearDownloadTabMapping(id);
       return;
     }
   }
@@ -25,11 +88,11 @@ chrome.downloads.onChanged.addListener(async (delta) => {
     if (total >= 0) {
       if ((minBytes > 0 && total < minBytes) || (maxBytes > 0 && total > maxBytes)) {
         try { await chrome.downloads.cancel(id); } catch {}
-        pendingSizeConstraints.delete(id);
-        downloadIdToTabId.delete(id);
+        await clearPendingSizeConstraint(id);
+        await clearDownloadTabMapping(id);
         return;
       }
-      pendingSizeConstraints.delete(id);
+      await clearPendingSizeConstraint(id);
     }
   }
 
@@ -38,7 +101,7 @@ chrome.downloads.onChanged.addListener(async (delta) => {
     try {
       if (pendingSizeConstraints.has(id)) {
         const { minBytes, maxBytes } = pendingSizeConstraints.get(id);
-        pendingSizeConstraints.delete(id);
+        await clearPendingSizeConstraint(id);
 
         const [item] = await chrome.downloads.search({ id });
         const finalBytes = item && Number.isFinite(item.fileSize) ? item.fileSize
@@ -50,7 +113,7 @@ chrome.downloads.onChanged.addListener(async (delta) => {
         if (tooSmall || tooLarge) {
           try { await chrome.downloads.removeFile(id); } catch {}
           try { await chrome.downloads.erase({ id }); } catch {}
-          downloadIdToTabId.delete(id);
+          await clearDownloadTabMapping(id);
           return;
         }
       }
@@ -60,12 +123,12 @@ chrome.downloads.onChanged.addListener(async (delta) => {
         await closeTabRespectingWindow(tabId, settings);
       }
     } finally {
-      downloadIdToTabId.delete(id);
+      await clearDownloadTabMapping(id);
     }
   }
 
   if (delta.error || (delta.state && delta.state.current === "interrupted")) {
-    pendingSizeConstraints.delete(id);
-    downloadIdToTabId.delete(id);
+    await clearPendingSizeConstraint(id);
+    await clearDownloadTabMapping(id);
   }
 });

@@ -121,6 +121,10 @@ function sanitizeSettingsInput(input) {
 
     // Automation
     sanitized.autoRunOnNewTabs = !!cfg.autoRunOnNewTabs;
+    sanitized.autoRunTiming = (cfg.autoRunTiming === 'start' || cfg.autoRunTiming === 'complete')
+        ? cfg.autoRunTiming
+        : DEFAULTS.autoRunTiming;
+    sanitized.autoCloseOnStart = !!cfg.autoCloseOnStart;
 
     // Permissions
     sanitized.allowedOrigins = Array.isArray(cfg.allowedOrigins) ? normalizeMatchPatterns(cfg.allowedOrigins) : [];
@@ -260,6 +264,8 @@ function load() {
 
         // Automation
         $("autoRunOnNewTabs").checked = !!safeCfg.autoRunOnNewTabs;
+        $("autoRunTiming").value = safeCfg.autoRunTiming || DEFAULTS.autoRunTiming;
+        $("autoCloseOnStart").checked = !!safeCfg.autoCloseOnStart;
 
         // Performance
         $("probeConcurrency").value    = clampInt(safeCfg.probeConcurrency, 1, 32, DEFAULTS.probeConcurrency);
@@ -342,6 +348,8 @@ function buildConfigFromUI() {
 
         // Automation
         autoRunOnNewTabs: $("autoRunOnNewTabs").checked,
+        autoRunTiming: $("autoRunTiming").value || DEFAULTS.autoRunTiming,
+        autoCloseOnStart: $("autoCloseOnStart").checked,
 
         // After
         closeTabAfterDownload: $("closeTabAfterDownload").checked,
@@ -446,7 +454,7 @@ function pickSettingsOnly(obj) {
         'inferExtensionFromUrl',
         'inferUrlAllowedExtensions','triggerUrlSubstrings','triggerBypassFilters',
         'probeConcurrency','downloadConcurrency',
-        'autoRunOnNewTabs',
+        'autoRunOnNewTabs','autoRunTiming','autoCloseOnStart',
         'closeTabAfterDownload','keepWindowOpenOnLastTabClose',
         'filtersEnabled','filters'
     ];
