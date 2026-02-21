@@ -131,7 +131,7 @@ async function tick() {
   assert.equal(typeof tasks[0].downloadId, "number");
 }
 
-// 2) auto-run retry on no-download sets pending + no-download
+// 2) probe failure removes auto task (no pending)
 {
   const env = createChromeStub({
     sync: { autoRunOnNewTabs: true, autoRunTiming: "start", autoCloseOnStart: false, strictSingleDetection: true },
@@ -153,9 +153,7 @@ async function tick() {
 
   const tasks = await tasksState.getTasks();
   assert.equal(env.calls.downloads.length, 0);
-  assert.equal(tasks.length, 1);
-  assert.equal(tasks[0].status, "pending");
-  assert.equal(tasks[0].lastError, "no-download");
+  assert.equal(tasks.length, 0);
 }
 
 // 3) manual retry flow starts download on tab complete

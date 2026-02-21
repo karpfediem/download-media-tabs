@@ -3,7 +3,8 @@ import { REASONS } from "./reasons.js";
 export function shouldSkipTask(reason) {
   return reason === REASONS.FILTERED ||
     reason === REASONS.SIZE_FILTER ||
-    reason === REASONS.NO_SITE_ACCESS;
+    reason === REASONS.NO_SITE_ACCESS ||
+    reason === REASONS.PROBE_FAILED;
 }
 
 export function failureUpdate(reason, { retryOnComplete = false } = {}) {
