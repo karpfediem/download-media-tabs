@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { selectCandidateTabs } from "../src/selection.js";
+import { tab, resetTabIds } from "./helpers/tab-fixtures.mjs";
 
 let allTabs = [];
 const currentWindowId = 1;
@@ -31,9 +32,10 @@ globalThis.chrome = {
 
 // allWindows returns all tabs
 {
+  resetTabIds();
   setTabs([
-    { id: 1, windowId: 1 },
-    { id: 2, windowId: 2 }
+    tab({ id: 1, windowId: 1 }),
+    tab({ id: 2, windowId: 2 })
   ]);
   const res = await selectCandidateTabs("allWindows");
   assert.equal(res.length, 2);
@@ -41,11 +43,12 @@ globalThis.chrome = {
 
 // selectedTabs uses highlighted tabs in current window
 {
+  resetTabIds();
   setTabs([
-    { id: 1, windowId: 1, highlighted: false },
-    { id: 2, windowId: 1, highlighted: true },
-    { id: 3, windowId: 1, highlighted: true },
-    { id: 4, windowId: 2, highlighted: true }
+    tab({ id: 1, windowId: 1, highlighted: false }),
+    tab({ id: 2, windowId: 1, highlighted: true }),
+    tab({ id: 3, windowId: 1, highlighted: true }),
+    tab({ id: 4, windowId: 2, highlighted: true })
   ]);
   const res = await selectCandidateTabs("selectedTabs");
   assert.deepEqual(res.map(t => t.id), [2, 3]);
@@ -53,10 +56,11 @@ globalThis.chrome = {
 
 // selectedTabs falls back to current window when none highlighted
 {
+  resetTabIds();
   setTabs([
-    { id: 10, windowId: 1, highlighted: false },
-    { id: 11, windowId: 1, highlighted: false },
-    { id: 12, windowId: 2, highlighted: true }
+    tab({ id: 10, windowId: 1, highlighted: false }),
+    tab({ id: 11, windowId: 1, highlighted: false }),
+    tab({ id: 12, windowId: 2, highlighted: true })
   ]);
   const res = await selectCandidateTabs("selectedTabs");
   assert.deepEqual(res.map(t => t.id), [10, 11]);
@@ -64,11 +68,12 @@ globalThis.chrome = {
 
 // left/right of active
 {
+  resetTabIds();
   setTabs([
-    { id: 20, windowId: 1, index: 0, active: false },
-    { id: 21, windowId: 1, index: 1, active: false },
-    { id: 22, windowId: 1, index: 2, active: true },
-    { id: 23, windowId: 1, index: 3, active: false }
+    tab({ id: 20, windowId: 1, index: 0, active: false }),
+    tab({ id: 21, windowId: 1, index: 1, active: false }),
+    tab({ id: 22, windowId: 1, index: 2, active: true }),
+    tab({ id: 23, windowId: 1, index: 3, active: false })
   ]);
   const left = await selectCandidateTabs("leftOfActive");
   const right = await selectCandidateTabs("rightOfActive");
@@ -78,11 +83,12 @@ globalThis.chrome = {
 
 // currentGroup uses active tab group
 {
+  resetTabIds();
   setTabs([
-    { id: 30, windowId: 1, index: 0, active: true, groupId: 10 },
-    { id: 31, windowId: 1, index: 1, active: false, groupId: 10 },
-    { id: 32, windowId: 1, index: 2, active: false, groupId: 11 },
-    { id: 33, windowId: 2, index: 0, active: false, groupId: 10 }
+    tab({ id: 30, windowId: 1, index: 0, active: true, groupId: 10 }),
+    tab({ id: 31, windowId: 1, index: 1, active: false, groupId: 10 }),
+    tab({ id: 32, windowId: 1, index: 2, active: false, groupId: 11 }),
+    tab({ id: 33, windowId: 2, index: 0, active: false, groupId: 10 })
   ]);
   const res = await selectCandidateTabs("currentGroup");
   assert.deepEqual(res.map(t => t.id), [30, 31]);
@@ -90,9 +96,10 @@ globalThis.chrome = {
 
 // currentGroup returns [] when no active group
 {
+  resetTabIds();
   setTabs([
-    { id: 40, windowId: 1, index: 0, active: true, groupId: -1 },
-    { id: 41, windowId: 1, index: 1, active: false, groupId: 5 }
+    tab({ id: 40, windowId: 1, index: 0, active: true, groupId: -1 }),
+    tab({ id: 41, windowId: 1, index: 1, active: false, groupId: 5 })
   ]);
   const res = await selectCandidateTabs("currentGroup");
   assert.deepEqual(res, []);
