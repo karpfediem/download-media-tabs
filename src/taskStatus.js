@@ -1,7 +1,9 @@
 import { REASONS } from "./reasons.js";
 
 export function shouldSkipTask(reason) {
-  return reason === REASONS.FILTERED || reason === REASONS.SIZE_FILTER;
+  return reason === REASONS.FILTERED ||
+    reason === REASONS.SIZE_FILTER ||
+    reason === REASONS.NO_SITE_ACCESS;
 }
 
 export function failureUpdate(reason, { retryOnComplete = false } = {}) {
