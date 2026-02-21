@@ -135,6 +135,14 @@ function shouldSkipTask(reason) {
   return reason === "filtered" || reason === "size-filter";
 }
 
+async function saveRunTrace(trace) {
+  try {
+    if (chrome.storage?.local) {
+      await chrome.storage.local.set({ dmtLastRunTrace: trace });
+    }
+  } catch {}
+}
+
 export async function runDownload({ mode }) {
   const settings = await getSettings();
 
@@ -151,8 +159,17 @@ export async function runDownload({ mode }) {
       return ["http:", "https:", "ftp:", "data:"].includes(u.protocol);
     } catch { return false; }
   });
+  const trace = {
+    createdAt: Date.now(),
+    trigger: `manual:${mode || "currentWindow"}`,
+    considered: candidateTabs.length,
+    entries: []
+  };
+  const traceByTabId = new Map();
   if (candidateTabs.length === 0) {
     console.log("[Download Media Tabs] No candidate tabs.");
+    trace.note = "No candidate tabs (only non-web URLs in scope).";
+    await saveRunTrace(trace);
     return;
   }
 
@@ -162,7 +179,9 @@ export async function runDownload({ mode }) {
 
   const evaluated = await Promise.allSettled(candidateTabs.map(tab => limitProbe(async () => {
     const result = await evaluateTaskForTab(tab, settings);
-    if (!result.ok) return { tab, ok: false, reason: result.reason || "filtered" };
+    if (!result.ok) {
+      return { tab, ok: false, reason: result.reason || "filtered" };
+    }
     return { tab, ok: true, plan: result.plan };
   })));
 
@@ -174,6 +193,14 @@ export async function runDownload({ mode }) {
     if (!res.value.ok) {
       const reason = String(res.value.reason || "filtered");
       reasonCounts.set(reason, (reasonCounts.get(reason) || 0) + 1);
+      const entry = {
+        tabId: res.value.tab?.id,
+        url: res.value.tab?.url || "",
+        decision: "filtered",
+        reason
+      };
+      trace.entries.push(entry);
+      if (typeof entry.tabId === "number") traceByTabId.set(entry.tabId, entry);
       continue;
     }
     const plan = res.value.plan;
@@ -184,6 +211,15 @@ export async function runDownload({ mode }) {
       order.push(key);
     }
     groups.get(key).push({ tab: res.value.tab, plan });
+    const entry = {
+      tabId: res.value.tab?.id,
+      url: res.value.tab?.url || "",
+      decision: "download",
+      reason: "",
+      downloadUrl: plan.url
+    };
+    trace.entries.push(entry);
+    if (typeof entry.tabId === "number") traceByTabId.set(entry.tabId, entry);
   }
 
   if (!order.length) {
@@ -193,6 +229,8 @@ export async function runDownload({ mode }) {
     } else if (reasonCounts.has("probe-failed")) {
       console.warn("[Download Media Tabs] Probe failed. Try reloading the tab or disabling strict detection.");
     }
+    trace.note = "No downloads started (all URLs filtered).";
+    await saveRunTrace(trace);
     return;
   }
 
@@ -210,6 +248,11 @@ export async function runDownload({ mode }) {
     if (seenUrls.has(entry.plan.url)) {
       entry.isDuplicate = true;
       await updateTask(entry.task.id, { status: "completed", lastError: "duplicate" });
+      const traceEntry = traceByTabId.get(entry.tab?.id);
+      if (traceEntry) {
+        traceEntry.decision = "skipped";
+        traceEntry.reason = "duplicate";
+      }
     } else {
       seenUrls.add(entry.plan.url);
     }
@@ -224,14 +267,29 @@ export async function runDownload({ mode }) {
       } else {
         await updateTask(entry.task.id, { status: "failed", lastError: reason });
       }
+      const traceEntry = traceByTabId.get(entry.tab?.id);
+      if (traceEntry) {
+        if (reason === "size-filter") {
+          traceEntry.decision = "filtered";
+        } else {
+          traceEntry.decision = "failed";
+        }
+        traceEntry.reason = reason;
+      }
       return;
     }
     await updateTask(entry.task.id, { downloadId: started.downloadId });
+    const traceEntry = traceByTabId.get(entry.tab?.id);
+    if (traceEntry) {
+      traceEntry.decision = "download";
+      traceEntry.reason = "started";
+    }
   })));
 
   const ok = results.filter(r => r.status === "fulfilled").length;
   const fail = results.length - ok;
   console.log(`[Download Media Tabs] Started ${ok} download(s), ${fail} failed to start.`);
+  await saveRunTrace(trace);
 }
 
 // Run a single task (used by auto-run and retries)

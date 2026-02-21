@@ -656,7 +656,8 @@ function formatTaskReason(task) {
         "duplicate": "Duplicate URL (skipped)",
         "tab-closed": "Tab closed",
         "interrupted": "Download interrupted",
-        "no-tab": "Tab no longer exists"
+        "no-tab": "Tab no longer exists",
+        "started": "Download started"
     };
     return map[code] || code;
 }
@@ -801,6 +802,63 @@ async function renderTasks() {
     });
 }
 
+async function renderRunTrace() {
+    const meta = $("taskTraceMeta");
+    const showFiltered = $("traceShowFiltered")?.checked === true;
+    const decisionFilter = $("traceDecisionFilter")?.value || "all";
+    const search = String($("traceSearch")?.value || "").trim().toLowerCase();
+    const empty = $("taskTraceEmpty");
+    const table = $("taskTraceTable");
+    const body = $("taskTraceTbody");
+    if (!meta || !empty || !table || !body) return;
+
+    const obj = await chrome.storage.local.get({ dmtLastRunTrace: null });
+    const trace = obj?.dmtLastRunTrace;
+    if (!trace || !Array.isArray(trace.entries) || trace.entries.length === 0) {
+        meta.textContent = "";
+        empty.style.display = "";
+        table.style.display = "none";
+        body.innerHTML = "";
+        return;
+    }
+    const when = trace.createdAt ? formatTaskTime(trace.createdAt) : "";
+    const trigger = trace.trigger || "manual";
+    const considered = Number.isFinite(trace.considered) ? trace.considered : trace.entries.length;
+    const note = trace.note ? ` · ${trace.note}` : "";
+    meta.textContent = `Trigger: ${trigger} · Considered: ${considered}${when ? ` · ${when}` : ""}${note}`;
+
+    body.innerHTML = "";
+    let entries = trace.entries.slice(0, 500);
+    if (!showFiltered) {
+        entries = entries.filter(entry => String(entry.decision || "") !== "filtered");
+    }
+    if (decisionFilter && decisionFilter !== "all") {
+        entries = entries.filter(entry => String(entry.decision || "") === decisionFilter);
+    }
+    if (search) {
+        entries = entries.filter(entry => String(entry.url || "").toLowerCase().includes(search));
+    }
+    for (const entry of entries) {
+        const tr = document.createElement("tr");
+        const tdTab = document.createElement("td");
+        tdTab.textContent = (typeof entry.tabId === "number") ? String(entry.tabId) : "";
+        const tdUrl = document.createElement("td");
+        tdUrl.className = "url";
+        tdUrl.textContent = entry.url || "";
+        const tdDecision = document.createElement("td");
+        tdDecision.textContent = entry.decision || "";
+        const tdReason = document.createElement("td");
+        tdReason.textContent = formatTaskReason({ lastError: entry.reason });
+        tr.appendChild(tdTab);
+        tr.appendChild(tdUrl);
+        tr.appendChild(tdDecision);
+        tr.appendChild(tdReason);
+        body.appendChild(tr);
+    }
+    table.style.display = "";
+    empty.style.display = "none";
+}
+
 // ---------- Wire up ----------
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -895,6 +953,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     $("taskFilterStatus")?.addEventListener("change", renderTasks);
     $("taskFilterText")?.addEventListener("input", renderTasks);
+    $("traceShowFiltered")?.addEventListener("change", renderRunTrace);
+    $("traceDecisionFilter")?.addEventListener("change", renderRunTrace);
+    $("traceSearch")?.addEventListener("input", renderRunTrace);
 
     $("importFile")?.addEventListener('change', (ev) => {
         const file = ev.target?.files?.[0];
@@ -926,5 +987,10 @@ document.addEventListener("DOMContentLoaded", () => {
         if (area === "local" && changes && Object.prototype.hasOwnProperty.call(changes, "dmtTasks")) {
             renderTasks();
         }
+        if (area === "local" && changes && Object.prototype.hasOwnProperty.call(changes, "dmtLastRunTrace")) {
+            renderRunTrace();
+        }
     });
+
+    renderRunTrace();
 });

@@ -273,6 +273,16 @@ button.task-btn{
 .task-sub-row td{
     background: color-mix(in srgb, var(--panel) 85%, transparent);
 }
+.task-trace{
+    margin-top:12px;
+    padding-top:8px;
+    border-top:1px solid var(--border);
+}
+.task-trace summary{
+    cursor:pointer;
+    font-weight:600;
+    margin-bottom:6px;
+}
 .task-meta{
     margin-top:2px;
     font-size:11px;

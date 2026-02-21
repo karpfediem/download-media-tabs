@@ -329,6 +329,37 @@
                     </table>
                     <p class="note">Retry opens the URL in a background tab and re‑attempts the download.</p>
                     <p class="note">Removing a task only removes it from the queue; it does not delete downloaded files.</p>
+                    <details class="task-trace" id="taskTraceDetails">
+                        <summary>Last run trace</summary>
+                        <div id="taskTraceMeta" class="note"></div>
+                        <div class="row task-row">
+                            <label>Decision
+                                <select id="traceDecisionFilter">
+                                    <option value="all">All</option>
+                                    <option value="download">Download</option>
+                                    <option value="failed">Failed</option>
+                                    <option value="skipped">Skipped</option>
+                                    <option value="filtered">Filtered</option>
+                                </select>
+                            </label>
+                            <label>Search URL
+                                <input id="traceSearch" type="text" placeholder="Filter by URL substring">
+                            </label>
+                            <label class="inline"><input type="checkbox" id="traceShowFiltered"> Show filtered items</label>
+                        </div>
+                        <div id="taskTraceEmpty" class="note">No trace yet.</div>
+                        <table class="tasks-table" id="taskTraceTable">
+                            <thead>
+                                <tr>
+                                    <th>Tab</th>
+                                    <th>URL</th>
+                                    <th>Decision</th>
+                                    <th>Reason</th>
+                                </tr>
+                            </thead>
+                            <tbody id="taskTraceTbody"></tbody>
+                        </table>
+                    </details>
                 </fieldset>
             </section>
 
