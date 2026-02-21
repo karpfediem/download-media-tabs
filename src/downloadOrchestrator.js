@@ -7,7 +7,7 @@ import { applyPreFilters } from './filters.js';
 import { sizeWithin, headContentLength } from './headSize.js';
 import { decideTab } from './decide.js';
 import { setDownloadTabMapping, setPendingSizeConstraint } from './downloadsState.js';
-import { upsertTask, updateTask, getTaskById } from './tasksState.js';
+import { upsertTask, updateTask, getTaskById, removeTask } from './tasksState.js';
 
 // Internal helpers to reduce duplication and keep behavior consistent
 function planFromDecision(decision, settings, tabId) {
@@ -130,6 +130,10 @@ async function startDownloadForPlan(plan, settings, batchDate, closeOnStart = fa
   return { ok: true, downloadId };
 }
 
+function shouldSkipTask(reason) {
+  return reason === "filtered" || reason === "size-filter";
+}
+
 export async function runDownload({ mode }) {
   const settings = await getSettings();
 
@@ -164,7 +168,12 @@ export async function runDownload({ mode }) {
     await updateTask(entry.task.id, { status: "started", attempts, lastAttemptAt: Date.now() });
     const result = await evaluateTaskForTab(entry.tab, settings);
     if (!result.ok) {
-      await updateTask(entry.task.id, { status: "failed", lastError: result.reason || "filtered" });
+      const reason = result.reason || "filtered";
+      if (shouldSkipTask(reason)) {
+        await removeTask(entry.task.id);
+      } else {
+        await updateTask(entry.task.id, { status: "failed", lastError: reason });
+      }
       return null;
     }
     return { ...entry, plan: result.plan };
@@ -192,7 +201,12 @@ export async function runDownload({ mode }) {
   const results = await Promise.allSettled(plans.map(entry => limitDl(async () => {
     const started = await startDownloadForPlan(entry.plan, settings, batchDate, false);
     if (!started.ok) {
-      await updateTask(entry.task.id, { status: "failed", lastError: started.reason || "no-download" });
+      const reason = started.reason || "no-download";
+      if (shouldSkipTask(reason)) {
+        await removeTask(entry.task.id);
+      } else {
+        await updateTask(entry.task.id, { status: "failed", lastError: reason });
+      }
       return;
     }
     await updateTask(entry.task.id, { downloadId: started.downloadId });
@@ -233,10 +247,15 @@ export async function runTaskForTab(tabOrId, taskId, opts = {}) {
   const result = await evaluateTaskForTab(tab, settings);
   if (!result.ok) {
     if (taskId) {
-      await updateTask(taskId, {
-        status: retryOnComplete ? "pending" : "failed",
-        lastError: retryOnComplete ? "no-download" : (result.reason || "filtered")
-      });
+      const reason = result.reason || "filtered";
+      if (shouldSkipTask(reason)) {
+        await removeTask(taskId);
+      } else {
+        await updateTask(taskId, {
+          status: retryOnComplete ? "pending" : "failed",
+          lastError: retryOnComplete ? "no-download" : reason
+        });
+      }
     }
     return;
   }
@@ -245,10 +264,15 @@ export async function runTaskForTab(tabOrId, taskId, opts = {}) {
   const started = await startDownloadForPlan(result.plan, settings, batchDate, closeOnStart);
   if (!started.ok) {
     if (taskId) {
-      await updateTask(taskId, {
-        status: retryOnComplete ? "pending" : "failed",
-        lastError: retryOnComplete ? "no-download" : (started.reason || "no-download")
-      });
+      const reason = started.reason || "no-download";
+      if (shouldSkipTask(reason)) {
+        await removeTask(taskId);
+      } else {
+        await updateTask(taskId, {
+          status: retryOnComplete ? "pending" : "failed",
+          lastError: retryOnComplete ? "no-download" : reason
+        });
+      }
     }
     return;
   }

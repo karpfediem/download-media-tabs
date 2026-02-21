@@ -244,10 +244,58 @@ button.task-btn{
     display:inline-flex; align-items:center; gap:8px;
     text-transform:capitalize;
 }
+.task-status-cell{
+    vertical-align:top;
+}
+.task-status-row{
+    display:flex;
+    align-items:center;
+    gap:6px;
+}
+.task-group-toggle{
+    width:18px;
+    height:18px;
+    border-radius:999px;
+    border:1px solid var(--border);
+    background:transparent;
+    color:var(--muted);
+    font-size:11px;
+    line-height:1;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    padding:0;
+}
+.task-group-toggle.open{
+    color:var(--text);
+    border-color:var(--text);
+}
+.task-sub-row td{
+    background: color-mix(in srgb, var(--panel) 85%, transparent);
+}
 .task-meta{
     margin-top:2px;
     font-size:11px;
     color: var(--muted);
+}
+.task-group-row td{
+    padding:8px 8px;
+    background: color-mix(in srgb, var(--panel) 75%, transparent);
+    border-bottom:1px solid var(--border);
+}
+.task-group-url{
+    font-weight:600;
+    font-size:12px;
+    word-break:break-all;
+}
+.task-group-meta{
+    margin-top:2px;
+    font-size:11px;
+    color: var(--muted);
+}
+.task-sub-url{
+    color: var(--muted);
+    font-size:11px;
 }
 .task-dot{
     width:10px; height:10px; border-radius:999px;

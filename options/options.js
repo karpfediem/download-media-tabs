@@ -642,6 +642,8 @@ function formatTaskTime(ts) {
     try { return new Date(ts).toLocaleString(); } catch { return ""; }
 }
 
+const taskGroupState = new Map();
+
 function formatTaskReason(task) {
     const code = String(task?.lastError || "").trim();
     if (!code) return "";
@@ -689,9 +691,42 @@ async function renderTasks() {
     table.style.display = "";
     empty.style.display = "none";
 
-    filtered.forEach(task => {
+    const groups = new Map();
+    const order = [];
+    for (const task of filtered) {
+        const key = String(task.url || "");
+        if (!groups.has(key)) {
+            groups.set(key, []);
+            order.push(key);
+        }
+        groups.get(key).push(task);
+    }
+
+    order.forEach(key => {
+        const group = groups.get(key) || [];
+        if (!group.length) return;
+        const headerTask = group.find(t => String(t.lastError || "") !== "duplicate") || group[0];
+        const hiddenTasks = group.filter(t => t.id !== headerTask.id && String(t.lastError || "") === "duplicate");
+        const expanded = taskGroupState.get(key) === true;
+        const showToggle = hiddenTasks.length > 0;
+
+        const renderTaskRow = (task, { isHeader, showUrl, subLabel, groupNote, groupKey, expandedState }) => {
         const tr = document.createElement("tr");
+        if (!isHeader) tr.classList.add("task-sub-row");
         const tdStatus = document.createElement("td");
+        tdStatus.className = "task-status-cell";
+        const statusRow = document.createElement("div");
+        statusRow.className = "task-status-row";
+        if (isHeader && showToggle) {
+            const toggle = document.createElement("button");
+            toggle.type = "button";
+            toggle.className = `task-group-toggle${expandedState ? " open" : ""}`;
+            toggle.textContent = expandedState ? "▾" : "▸";
+            toggle.title = expandedState ? "Hide skipped tasks" : "Show skipped tasks";
+            toggle.dataset.action = "toggleTaskGroup";
+            toggle.dataset.groupKey = groupKey;
+            statusRow.appendChild(toggle);
+        }
         const statusWrap = document.createElement("span");
         statusWrap.className = "task-status";
         const dot = document.createElement("span");
@@ -700,20 +735,26 @@ async function renderTasks() {
         label.textContent = task.status || "";
         statusWrap.appendChild(dot);
         statusWrap.appendChild(label);
+        statusRow.appendChild(statusWrap);
+        tdStatus.appendChild(statusRow);
         const meta = document.createElement("div");
         meta.className = "task-meta";
         const kind = task.kind ? String(task.kind) : "";
         const reason = formatTaskReason(task);
-        if (reason) {
-            meta.textContent = `${reason}${kind ? ` · ${kind}` : ""}`;
-        } else if (kind) {
-            meta.textContent = kind;
-        }
-        tdStatus.appendChild(statusWrap);
+        const parts = [];
+        if (reason) parts.push(reason);
+        if (kind) parts.push(kind);
+        if (groupNote) parts.push(groupNote);
+        if (parts.length) meta.textContent = parts.join(" · ");
         if (meta.textContent) tdStatus.appendChild(meta);
         const tdUrl = document.createElement("td");
         tdUrl.className = "url";
-        tdUrl.textContent = task.url || "";
+        if (showUrl) {
+            tdUrl.textContent = task.url || "";
+        } else {
+            tdUrl.classList.add("task-sub-url");
+            tdUrl.textContent = subLabel || "";
+        }
         const tdUpdated = document.createElement("td");
         tdUpdated.textContent = formatTaskTime(task.updatedAt || task.createdAt);
         const tdActions = document.createElement("td");
@@ -737,6 +778,26 @@ async function renderTasks() {
         tr.appendChild(tdUpdated);
         tr.appendChild(tdActions);
         body.appendChild(tr);
+        };
+
+        const groupNote = showToggle ? `${hiddenTasks.length} skipped` : "";
+        renderTaskRow(headerTask, {
+            isHeader: true,
+            showUrl: true,
+            groupNote,
+            groupKey: key,
+            expandedState: expanded
+        });
+
+        if (expanded) {
+            hiddenTasks.forEach(task => {
+                renderTaskRow(task, {
+                    isHeader: false,
+                    showUrl: false,
+                    subLabel: (typeof task.tabId === "number") ? `tab ${task.tabId}` : ""
+                });
+            });
+        }
     });
 }
 
@@ -794,6 +855,15 @@ document.addEventListener("DOMContentLoaded", () => {
             chrome.permissions.request({ origins: patterns }, (granted) => {
                 showToast(granted ? "Permissions granted." : "Some or all permissions were denied.", granted ? 'success' : 'warn', 2200);
             });
+            return;
+        }
+        if (t.dataset?.action === "toggleTaskGroup") {
+            const key = t.dataset.groupKey;
+            if (key != null) {
+                const next = !(taskGroupState.get(key) === true);
+                taskGroupState.set(key, next);
+                renderTasks();
+            }
             return;
         }
         if (t.dataset?.action === "retryTask") {
