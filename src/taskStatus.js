@@ -15,3 +15,11 @@ export function failureUpdate(reason, { retryOnComplete = false } = {}) {
     lastError: retryOnComplete ? REASONS.NO_DOWNLOAD : safeReason
   };
 }
+
+export function interruptedUpdate() {
+  return {
+    action: "update",
+    status: "failed",
+    lastError: REASONS.INTERRUPTED
+  };
+}

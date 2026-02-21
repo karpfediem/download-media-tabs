@@ -1,7 +1,7 @@
 import { getSettings } from './settings.js';
 import { closeTabRespectingWindow } from './closeTab.js';
 import { updateTaskByDownloadId, removeTaskByDownloadId } from './tasksState.js';
-import { REASONS } from './reasons.js';
+import { interruptedUpdate } from './taskStatus.js';
 import {
   storageSessionGet,
   storageSessionSet,
@@ -179,7 +179,10 @@ downloadsOnChangedAddListener(async (delta) => {
   if (delta.error || (delta.state && delta.state.current === "interrupted")) {
     await clearPendingSizeConstraint(id);
     await clearDownloadTabMapping(id);
-    await updateTaskByDownloadId(id, { status: "failed", lastError: REASONS.INTERRUPTED });
+    const update = interruptedUpdate();
+    if (update.action === "update") {
+      await updateTaskByDownloadId(id, { status: update.status, lastError: update.lastError });
+    }
   }
 
   if ((delta.state && delta.state.current === "in_progress") ||
