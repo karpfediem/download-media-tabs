@@ -175,6 +175,25 @@ export function addRuntimeOnMessageListener(fn) {
   chrome?.runtime?.onMessage?.addListener(fn);
 }
 
+/** @param {string} name @param {Object} info */
+export function alarmsCreate(name, info) {
+  const chrome = getChrome();
+  chrome?.alarms?.create?.(name, info);
+}
+
+/** @param {string} name @param {Function=} cb */
+export function alarmsClear(name, cb) {
+  const chrome = getChrome();
+  if (!chrome?.alarms?.clear) return;
+  chrome.alarms.clear(name, cb);
+}
+
+/** @param {Function} fn */
+export function addAlarmsOnAlarmListener(fn) {
+  const chrome = getChrome();
+  chrome?.alarms?.onAlarm?.addListener(fn);
+}
+
 /** @returns {void} */
 export function runtimeOpenOptionsPage() {
   const chrome = getChrome();

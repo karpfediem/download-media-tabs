@@ -19,7 +19,10 @@ import {
   addTabsOnUpdatedListener,
   tabsGet,
   tabsCreate,
-  addRuntimeOnMessageListener
+  addRuntimeOnMessageListener,
+  alarmsCreate,
+  alarmsClear,
+  addAlarmsOnAlarmListener
 } from './chromeApi.js';
 
 // Initialize context menus on install/startup
@@ -46,6 +49,16 @@ let autoCloseOnStart = false;
 let keepWindowOpenOnLastTabClose = false;
 const lastProcessedUrlByTab = new Map();
 const manualRetryByTabId = new Map();
+const PENDING_ALARM = "dmt-pending-tasks";
+const PENDING_INTERVAL_MIN = 5;
+
+function schedulePendingAlarm() {
+  if (!autoRunEnabled) {
+    alarmsClear(PENDING_ALARM);
+    return;
+  }
+  alarmsCreate(PENDING_ALARM, { periodInMinutes: PENDING_INTERVAL_MIN });
+}
 
 async function refreshAutoRunSetting() {
   try {
@@ -66,6 +79,7 @@ async function refreshAutoRunSetting() {
     keepWindowOpenOnLastTabClose = false;
   } finally {
     autoRunLoaded = true;
+    schedulePendingAlarm();
   }
 }
 
@@ -123,16 +137,24 @@ async function handleAutoRun(tab, phase) {
 }
 
 async function processPendingTasks() {
-  if (!autoRunEnabled) return;
   const tasks = await getTasks();
   if (!tasks.length) return;
-  const pending = tasks.filter(t => t && t.status === "pending" && t.kind === "auto");
+  const pending = tasks.filter(t => t && t.status === "pending");
   if (!pending.length) return;
   for (const task of pending) {
+    const kind = task.kind || "auto";
+    const manualPending = task.pendingRunOn === "complete" || kind === "manual";
+    const autoPending = !manualPending && kind === "auto";
+    if (autoPending && !autoRunEnabled) continue;
     let tab;
     try { tab = await tabsGet(task.tabId); } catch { tab = null; }
     if (!tab || tab.url !== task.url) {
       await updateTask(task.id, { status: "failed", lastError: REASONS.NO_TAB });
+      continue;
+    }
+    if (manualPending) {
+      if (tab.status !== "complete") continue;
+      await runAutoTaskForTab(tab, task, "complete");
       continue;
     }
     if (autoRunTiming === "complete" && tab.status !== "complete") {
@@ -167,6 +189,7 @@ addStorageOnChangedListener((changes, area) => {
   if (Object.prototype.hasOwnProperty.call(changes, 'autoRunOnNewTabs')) {
     autoRunEnabled = !!(changes.autoRunOnNewTabs.newValue);
     autoRunLoaded = true;
+    schedulePendingAlarm();
     if (autoRunEnabled) {
       try { processPendingTasks(); } catch {}
     }
@@ -195,6 +218,11 @@ addTabsOnRemovedListener((tabId) => {
   } catch {}
 });
 
+addAlarmsOnAlarmListener((alarm) => {
+  if (!alarm || alarm.name !== PENDING_ALARM) return;
+  try { processPendingTasks(); } catch {}
+});
+
 addTabsOnUpdatedListener(async (tabId, changeInfo, tab) => {
   // Ensure we have loaded the setting at least once in this SW lifetime
   if (!autoRunLoaded) {
@@ -214,15 +242,42 @@ addTabsOnUpdatedListener(async (tabId, changeInfo, tab) => {
 
 addRuntimeOnMessageListener((msg, sender, sendResponse) => {
   if (!msg || typeof msg !== "object") return;
+  if (msg.type === "dmt_start_task") {
+    const taskId = msg.taskId;
+    (async () => {
+      const task = await getTaskById(taskId);
+      if (!task || !task.url) return;
+      let tab = null;
+      if (typeof task.tabId === "number") {
+        try { tab = await tabsGet(task.tabId); } catch { tab = null; }
+      }
+      if (!tab || tab.url !== task.url) {
+        await updateTask(task.id, { status: "failed", lastError: REASONS.NO_TAB });
+        return;
+      }
+      await updateTask(task.id, { status: "pending", lastError: "" });
+      await runAutoTaskForTab(tab, task, "start");
+    })();
+    sendResponse({ ok: true });
+    return;
+  }
   if (msg.type === "dmt_retry_task") {
     const taskId = msg.taskId;
     (async () => {
       const task = await getTaskById(taskId);
       if (!task || !task.url) return;
-      await updateTask(task.id, { status: "pending", lastError: "" });
       const tab = await tabsCreate({ url: task.url, active: false });
       if (tab && typeof tab.id === "number") {
         manualRetryByTabId.set(tab.id, task.id);
+        await updateTask(task.id, {
+          status: "pending",
+          lastError: "",
+          tabId: tab.id,
+          url: task.url,
+          pendingRunOn: "complete"
+        });
+      } else {
+        await updateTask(task.id, { status: "failed", lastError: REASONS.NO_TAB });
       }
     })();
     sendResponse({ ok: true });

@@ -760,6 +760,14 @@ async function renderTasks() {
         tdUpdated.textContent = formatTaskTime(task.updatedAt || task.createdAt);
         const tdActions = document.createElement("td");
         tdActions.className = "actions";
+        if (task.status === "pending") {
+            const btn = document.createElement("button");
+            btn.className = "task-btn";
+            btn.textContent = "Start";
+            btn.dataset.action = "startTask";
+            btn.dataset.taskId = task.id;
+            tdActions.appendChild(btn);
+        }
         if (task.status === "failed") {
             const btn = document.createElement("button");
             btn.className = "task-btn";
@@ -929,6 +937,14 @@ document.addEventListener("DOMContentLoaded", () => {
             if (taskId) {
                 chrome.runtime.sendMessage({ type: "dmt_retry_task", taskId });
                 showToast("Retry queued.", "info", 1200);
+            }
+            return;
+        }
+        if (t.dataset?.action === "startTask") {
+            const taskId = t.dataset.taskId;
+            if (taskId) {
+                chrome.runtime.sendMessage({ type: "dmt_start_task", taskId });
+                showToast("Start queued.", "info", 1200);
             }
             return;
         }

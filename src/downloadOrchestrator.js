@@ -226,11 +226,18 @@ export async function runTaskForTab(tabOrId, taskId, opts = {}) {
     const u = new URL(tab.url);
     if (u.protocol === "file:") {
       const allowed = await isFileSchemeAllowed();
-      if (!allowed) return;
+      if (!allowed) {
+        if (taskId) await finalizeTaskFailure(taskId, REASONS.NO_SITE_ACCESS, { retryOnComplete });
+        return;
+      }
     } else if (!["http:", "https:", "ftp:", "data:"].includes(u.protocol)) {
+      if (taskId) await finalizeTaskFailure(taskId, REASONS.FILTERED, { retryOnComplete });
       return;
     }
-  } catch { return; }
+  } catch {
+    if (taskId) await finalizeTaskFailure(taskId, REASONS.FILTERED, { retryOnComplete });
+    return;
+  }
 
   if (taskId) {
     const existing = await getTaskById(taskId);
