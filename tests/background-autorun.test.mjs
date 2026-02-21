@@ -214,4 +214,26 @@ async function tick() {
   assert.equal(tasks.length, 0);
 }
 
+// 5) autoRunTiming=complete does not create pending task on loading
+{
+  const env = createChromeStub({
+    sync: { autoRunOnNewTabs: true, autoRunTiming: "complete", autoCloseOnStart: false, strictSingleDetection: false }
+  });
+  await resetTasksStorage();
+  resetDownloadsState(downloadsState);
+  await importBackground("auto-complete-loading");
+  await tick();
+
+  const tab = { id: 6, url: "https://example.com/page", status: "loading", windowId: 1 };
+  env.tabsById.set(6, tab);
+  await withMutedConsole(async () => {
+    for (const fn of env.listeners.tabsUpdated) {
+      await fn(6, { status: "loading" }, tab);
+    }
+  });
+
+  const tasks = await tasksState.getTasks();
+  assert.equal(tasks.length, 0);
+}
+
 console.log("background-autorun.test.mjs passed");

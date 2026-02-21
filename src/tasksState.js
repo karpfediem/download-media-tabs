@@ -31,6 +31,13 @@ export async function getTaskById(id) {
   return tasks.find(t => t && t.id === id) || null;
 }
 
+export async function findTaskByTabUrlKind(tabId, url, kind) {
+  const tasks = await getTasks();
+  return tasks.find(t =>
+    t && t.tabId === tabId && t.url === url && t.kind === (kind || "auto") && t.status !== "completed"
+  ) || null;
+}
+
 export async function upsertTask({ tabId, url, kind }) {
   const tasks = await getTasks();
   const existing = tasks.find(t =>

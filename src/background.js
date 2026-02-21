@@ -3,7 +3,7 @@
 
 import { setDefaultContextMenus, installActionClick, installContextMenuClick } from './menus.js';
 import { runDownload, runTaskForTab } from './downloadOrchestrator.js';
-import { upsertTask, updateTask, getTasks, getTaskById, markTasksForClosedTab } from './tasksState.js';
+import { upsertTask, updateTask, getTasks, getTaskById, markTasksForClosedTab, findTaskByTabUrlKind } from './tasksState.js';
 import { hasActiveDownloadForTab } from './downloadsState.js';
 import './downloadsState.js'; // side-effect: installs downloads onChanged listener
 import { isFileSchemeAllowed } from './fileAccess.js';
@@ -96,18 +96,22 @@ async function handleAutoRun(tab, phase) {
     }
   } catch { return; }
 
-  const task = await upsertTask({ tabId: tab.id, url: tab.url, kind: "auto" });
-  if (task.status !== "pending") return;
+  const existing = await findTaskByTabUrlKind(tab.id, tab.url, "auto");
+  const lastError = existing?.lastError || "";
 
   const prevUrl = lastProcessedUrlByTab.get(tab.id);
-  if (prevUrl === tab.url && task.lastError !== REASONS.NO_DOWNLOAD) return;
+  if (prevUrl === tab.url && lastError !== REASONS.NO_DOWNLOAD) return;
 
-  if (phase === "start" && task.lastError === REASONS.NO_DOWNLOAD) return;
+  if (phase === "start" && lastError === REASONS.NO_DOWNLOAD) return;
 
   const shouldRun =
     (autoRunTiming === phase) ||
-    (phase === "complete" && task.lastError === REASONS.NO_DOWNLOAD);
+    (phase === "complete" && lastError === REASONS.NO_DOWNLOAD);
 
+  if (!existing && !shouldRun) return;
+
+  const task = existing || await upsertTask({ tabId: tab.id, url: tab.url, kind: "auto" });
+  if (task.status !== "pending") return;
   if (!shouldRun) return;
 
   lastProcessedUrlByTab.set(tab.id, tab.url);
