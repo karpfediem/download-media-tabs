@@ -10,6 +10,13 @@ import { upsertTask, updateTask, getTaskById, removeTask } from './tasksState.js
 import { isFileSchemeAllowed } from './fileAccess.js';
 import { markDuplicatesByUrl } from './taskUtils.js';
 import { evaluateTabForPlan, createTaskEntriesFromEvaluated } from './taskPipeline.js';
+import {
+  createTraceContext,
+  groupEvaluatedResults,
+  markTraceDuplicate,
+  markTraceFailure,
+  markTraceStarted
+} from './orchestratorUtils.js';
 
 async function startDownloadWithBookkeeping(p, settings, batchDate, hasSizeRule, f, closeOnStart = false) {
   const filename = buildFilename(settings.filenamePattern, {
@@ -85,6 +92,17 @@ function shouldSkipTask(reason) {
   return reason === "filtered" || reason === "size-filter";
 }
 
+async function finalizeTaskFailure(taskId, reason, { retryOnComplete = false } = {}) {
+  if (!taskId) return;
+  if (shouldSkipTask(reason)) {
+    await removeTask(taskId);
+    return;
+  }
+  const status = retryOnComplete ? "pending" : "failed";
+  const lastError = retryOnComplete ? "no-download" : (reason || "no-download");
+  await updateTask(taskId, { status, lastError });
+}
+
 async function saveRunTrace(trace) {
   try {
     if (chrome.storage?.local) {
@@ -110,17 +128,15 @@ export async function runDownload({ mode }) {
       return ["http:", "https:", "ftp:", "data:"].includes(u.protocol);
     } catch { return false; }
   });
-  const trace = {
-    createdAt: Date.now(),
-    trigger: `manual:${mode || "currentWindow"}`,
-    considered: candidateTabs.length,
-    entries: []
-  };
-  const traceByTabId = new Map();
+  const traceCtx = createTraceContext({
+    mode: mode || "currentWindow",
+    candidateCount: candidateTabs.length,
+    now: Date.now()
+  });
   if (candidateTabs.length === 0) {
     console.log("[Download Media Tabs] No candidate tabs.");
-    trace.note = "No candidate tabs (only non-web URLs in scope).";
-    await saveRunTrace(trace);
+    traceCtx.trace.note = "No candidate tabs (only non-web URLs in scope).";
+    await saveRunTrace(traceCtx.trace);
     return;
   }
 
@@ -132,52 +148,17 @@ export async function runDownload({ mode }) {
     return await evaluateTabForPlan(tab, settings);
   })));
 
-  const reasonCounts = new Map();
-  const groups = new Map();
-  const order = [];
-  for (const res of evaluated) {
-    if (res.status !== "fulfilled" || !res.value) continue;
-    if (!res.value.ok) {
-      const reason = String(res.value.reason || "filtered");
-      reasonCounts.set(reason, (reasonCounts.get(reason) || 0) + 1);
-      const entry = {
-        tabId: res.value.tab?.id,
-        url: res.value.tab?.url || "",
-        decision: "filtered",
-        reason
-      };
-      trace.entries.push(entry);
-      if (typeof entry.tabId === "number") traceByTabId.set(entry.tabId, entry);
-      continue;
-    }
-    const plan = res.value.plan;
-    if (!plan || !plan.url) continue;
-    const key = plan.url;
-    if (!groups.has(key)) {
-      groups.set(key, []);
-      order.push(key);
-    }
-    groups.get(key).push({ tab: res.value.tab, plan });
-    const entry = {
-      tabId: res.value.tab?.id,
-      url: res.value.tab?.url || "",
-      decision: "download",
-      reason: "",
-      downloadUrl: plan.url
-    };
-    trace.entries.push(entry);
-    if (typeof entry.tabId === "number") traceByTabId.set(entry.tabId, entry);
-  }
+  const { groups, order } = groupEvaluatedResults(evaluated, traceCtx);
 
   if (!order.length) {
     console.log("[Download Media Tabs] Nothing to download after filtering.");
-    if (reasonCounts.has("no-site-access")) {
+    if (traceCtx.reasonCounts.has("no-site-access")) {
       console.warn("[Download Media Tabs] Probe blocked by missing site access. Grant site access (chrome://extensions or Performance → Request permissions) or disable strict detection.");
-    } else if (reasonCounts.has("probe-failed")) {
+    } else if (traceCtx.reasonCounts.has("probe-failed")) {
       console.warn("[Download Media Tabs] Probe failed. Try reloading the tab or disabling strict detection.");
     }
-    trace.note = "No downloads started (all URLs filtered).";
-    await saveRunTrace(trace);
+    traceCtx.trace.note = "No downloads started (all URLs filtered).";
+    await saveRunTrace(traceCtx.trace);
     return;
   }
 
@@ -198,11 +179,7 @@ export async function runDownload({ mode }) {
   for (const entry of markedEntries) {
     if (entry.isDuplicate) {
       await updateTask(entry.task.id, { status: "completed", lastError: "duplicate" });
-      const traceEntry = traceByTabId.get(entry.tab?.id);
-      if (traceEntry) {
-        traceEntry.decision = "skipped";
-        traceEntry.reason = "duplicate";
-      }
+      markTraceDuplicate(traceCtx, entry.tab?.id);
       if ((settings.autoCloseOnStart || settings.closeTabAfterDownload) && typeof entry.tab?.id === "number") {
         try {
           const tab = await chrome.tabs.get(entry.tab.id);
@@ -217,34 +194,18 @@ export async function runDownload({ mode }) {
     const started = await startDownloadForPlan(entry.plan, settings, batchDate, closeOnStart);
     if (!started.ok) {
       const reason = started.reason || "no-download";
-      if (shouldSkipTask(reason)) {
-        await removeTask(entry.task.id);
-      } else {
-        await updateTask(entry.task.id, { status: "failed", lastError: reason });
-      }
-      const traceEntry = traceByTabId.get(entry.tab?.id);
-      if (traceEntry) {
-        if (reason === "size-filter") {
-          traceEntry.decision = "filtered";
-        } else {
-          traceEntry.decision = "failed";
-        }
-        traceEntry.reason = reason;
-      }
+      await finalizeTaskFailure(entry.task.id, reason);
+      markTraceFailure(traceCtx, entry.tab?.id, reason);
       return;
     }
     await updateTask(entry.task.id, { downloadId: started.downloadId });
-    const traceEntry = traceByTabId.get(entry.tab?.id);
-    if (traceEntry) {
-      traceEntry.decision = "download";
-      traceEntry.reason = "started";
-    }
+    markTraceStarted(traceCtx, entry.tab?.id);
   })));
 
   const ok = results.filter(r => r.status === "fulfilled").length;
   const fail = results.length - ok;
   console.log(`[Download Media Tabs] Started ${ok} download(s), ${fail} failed to start.`);
-  await saveRunTrace(trace);
+  await saveRunTrace(traceCtx.trace);
 }
 
 // Run a single task (used by auto-run and retries)
@@ -283,14 +244,7 @@ export async function runTaskForTab(tabOrId, taskId, opts = {}) {
   if (!result.ok) {
     if (taskId) {
       const reason = result.reason || "filtered";
-      if (shouldSkipTask(reason)) {
-        await removeTask(taskId);
-      } else {
-        await updateTask(taskId, {
-          status: retryOnComplete ? "pending" : "failed",
-          lastError: retryOnComplete ? "no-download" : reason
-        });
-      }
+      await finalizeTaskFailure(taskId, reason, { retryOnComplete });
     }
     return;
   }
@@ -300,14 +254,7 @@ export async function runTaskForTab(tabOrId, taskId, opts = {}) {
   if (!started.ok) {
     if (taskId) {
       const reason = started.reason || "no-download";
-      if (shouldSkipTask(reason)) {
-        await removeTask(taskId);
-      } else {
-        await updateTask(taskId, {
-          status: retryOnComplete ? "pending" : "failed",
-          lastError: retryOnComplete ? "no-download" : reason
-        });
-      }
+      await finalizeTaskFailure(taskId, reason, { retryOnComplete });
     }
     return;
   }
