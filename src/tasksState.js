@@ -1,4 +1,5 @@
 import { REASONS } from "./reasons.js";
+import { storageLocalGet, storageLocalSet } from "./chromeApi.js";
 
 const TASKS_KEY = "dmtTasks";
 const TASKS_MAX = 500;
@@ -16,12 +17,12 @@ function normalizeTasks(tasks) {
 
 async function saveTasks(tasks) {
   const list = normalizeTasks(tasks);
-  await chrome.storage.local.set({ [TASKS_KEY]: list });
+  await storageLocalSet({ [TASKS_KEY]: list });
   return list;
 }
 
 export async function getTasks() {
-  const obj = await chrome.storage.local.get({ [TASKS_KEY]: [] });
+  const obj = await storageLocalGet({ [TASKS_KEY]: [] });
   return Array.isArray(obj[TASKS_KEY]) ? obj[TASKS_KEY] : [];
 }
 

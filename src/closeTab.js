@@ -1,21 +1,23 @@
+import { tabsGet, tabsRemove, tabsQuery, tabsCreate, getRuntimeLastError } from "./chromeApi.js";
+
 export async function closeTabRespectingWindow(tabId, settings) {
   try {
-    const tab = await chrome.tabs.get(tabId);
+    const tab = await tabsGet(tabId);
     if (!tab || typeof tab.windowId !== "number") {
-      chrome.tabs.remove(tabId, () => void chrome.runtime.lastError);
+      tabsRemove(tabId, () => void getRuntimeLastError());
       return;
     }
     if (!settings.keepWindowOpenOnLastTabClose) {
-      chrome.tabs.remove(tabId, () => void chrome.runtime.lastError);
+      tabsRemove(tabId, () => void getRuntimeLastError());
       return;
     }
 
-    const tabsInWindow = await chrome.tabs.query({ windowId: tab.windowId });
+    const tabsInWindow = await tabsQuery({ windowId: tab.windowId });
     if (!Array.isArray(tabsInWindow) || tabsInWindow.length <= 1) {
       try {
-        await chrome.tabs.create({ windowId: tab.windowId, url: "chrome://newtab/" });
+        await tabsCreate({ windowId: tab.windowId, url: "chrome://newtab/" });
       } catch {}
     }
-    chrome.tabs.remove(tabId, () => void chrome.runtime.lastError);
+    tabsRemove(tabId, () => void getRuntimeLastError());
   } catch {}
 }

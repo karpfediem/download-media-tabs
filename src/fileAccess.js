@@ -1,9 +1,8 @@
+import { isFileSchemeAllowed as chromeIsFileSchemeAllowed } from "./chromeApi.js";
+
 export async function isFileSchemeAllowed() {
   try {
-    if (!chrome?.extension?.isAllowedFileSchemeAccess) return false;
-    return await new Promise(resolve => {
-      chrome.extension.isAllowedFileSchemeAccess((allowed) => resolve(!!allowed));
-    });
+    return await chromeIsFileSchemeAllowed();
   } catch {
     return false;
   }

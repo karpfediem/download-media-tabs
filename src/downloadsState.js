@@ -2,6 +2,16 @@ import { getSettings } from './settings.js';
 import { closeTabRespectingWindow } from './closeTab.js';
 import { updateTaskByDownloadId, removeTaskByDownloadId } from './tasksState.js';
 import { REASONS } from './reasons.js';
+import {
+  storageSessionGet,
+  storageSessionSet,
+  downloadsOnChangedAddListener,
+  downloadsCancel,
+  downloadsSearch,
+  downloadsRemoveFile,
+  downloadsErase,
+  tabsGet
+} from './chromeApi.js';
 
 const SESSION_KEY = "dmtDownloadState";
 
@@ -14,16 +24,13 @@ async function persistState() {
       downloadIdToMeta: Array.from(downloadIdToMeta.entries()),
       pendingSizeConstraints: Array.from(pendingSizeConstraints.entries())
     };
-    if (chrome.storage?.session) {
-      await chrome.storage.session.set({ [SESSION_KEY]: obj });
-    }
+    await storageSessionSet({ [SESSION_KEY]: obj });
   } catch {}
 }
 
 async function loadState() {
   try {
-    if (!chrome.storage?.session) return;
-    const obj = await chrome.storage.session.get({ [SESSION_KEY]: null });
+    const obj = await storageSessionGet({ [SESSION_KEY]: null });
     const data = obj && obj[SESSION_KEY];
     if (!data) return;
     if (Array.isArray(data.downloadIdToMeta)) {
@@ -89,7 +96,7 @@ export async function clearPendingSizeConstraint(downloadId) {
 
 try { loadState(); } catch {}
 
-chrome.downloads.onChanged.addListener(async (delta) => {
+downloadsOnChangedAddListener(async (delta) => {
   if (!delta || typeof delta.id !== "number") return;
   const id = delta.id;
 
@@ -97,7 +104,7 @@ chrome.downloads.onChanged.addListener(async (delta) => {
     const { maxBytes } = pendingSizeConstraints.get(id);
     const rec = delta.bytesReceived.current;
     if (maxBytes > 0 && rec > maxBytes) {
-      try { await chrome.downloads.cancel(id); } catch {}
+      await downloadsCancel(id);
       await removeTaskByDownloadId(id);
       await clearPendingSizeConstraint(id);
       await clearDownloadTabMapping(id);
@@ -110,7 +117,7 @@ chrome.downloads.onChanged.addListener(async (delta) => {
     const total = delta.totalBytes.current;
     if (total >= 0) {
       if ((minBytes > 0 && total < minBytes) || (maxBytes > 0 && total > maxBytes)) {
-        try { await chrome.downloads.cancel(id); } catch {}
+        await downloadsCancel(id);
         await removeTaskByDownloadId(id);
         await clearPendingSizeConstraint(id);
         await clearDownloadTabMapping(id);
@@ -130,7 +137,7 @@ chrome.downloads.onChanged.addListener(async (delta) => {
         const { minBytes, maxBytes } = pendingSizeConstraints.get(id);
         await clearPendingSizeConstraint(id);
 
-        const [item] = await chrome.downloads.search({ id });
+        const [item] = await downloadsSearch({ id });
         const finalBytes = item && Number.isFinite(item.fileSize) ? item.fileSize
             : (item && Number.isFinite(item.bytesReceived) ? item.bytesReceived : -1);
 
@@ -138,8 +145,8 @@ chrome.downloads.onChanged.addListener(async (delta) => {
         const tooLarge = (maxBytes > 0 && finalBytes >= 0 && finalBytes > maxBytes);
 
         if (tooSmall || tooLarge) {
-          try { await chrome.downloads.removeFile(id); } catch {}
-          try { await chrome.downloads.erase({ id }); } catch {}
+          await downloadsRemoveFile(id);
+          await downloadsErase({ id });
           await removeTaskByDownloadId(id);
           await clearDownloadTabMapping(id);
           return;
@@ -152,7 +159,7 @@ chrome.downloads.onChanged.addListener(async (delta) => {
         const guardUrl = tabUrl || downloadUrl;
         if (guardUrl) {
           try {
-            const tab = await chrome.tabs.get(tabId);
+            const tab = await tabsGet(tabId);
             if (tab && tab.url !== guardUrl) {
               // Tab navigated elsewhere; skip auto-close.
               await updateTaskByDownloadId(id, { status: "completed" });
@@ -184,7 +191,7 @@ chrome.downloads.onChanged.addListener(async (delta) => {
       const guardUrl = tabUrl || downloadUrl;
       if (guardUrl) {
         try {
-          const tab = await chrome.tabs.get(meta.tabId);
+          const tab = await tabsGet(meta.tabId);
           if (!tab || tab.url !== guardUrl) {
             meta.closeOnStart = false;
             downloadIdToMeta.set(id, meta);

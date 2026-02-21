@@ -4,6 +4,7 @@ import { hasActiveDimensionRules, hasAnySubstring } from './filters.js';
 import { probeDocument } from './probe.js';
 import { isFileSchemeAllowed } from './fileAccess.js';
 import { REASONS } from './reasons.js';
+import { permissionsContains, scriptingExecuteScript } from './chromeApi.js';
 
 /** @typedef {import('./types.js').Settings} Settings */
 /** @typedef {import('./types.js').Decision} Decision */
@@ -20,7 +21,7 @@ export async function decideTab(tab, settings) {
   if (!canProbe) return { shouldDownload: false, reason: REASONS.NO_SITE_ACCESS };
 
   try {
-    const [{ result }] = await chrome.scripting.executeScript({
+    const [{ result }] = await scriptingExecuteScript({
       target: { tabId: tab.id },
       func: probeDocument,
       args: [!!settings.strictSingleDetection, Number(settings.coverageThreshold) || 0.5]
@@ -182,16 +183,13 @@ export function decideFromProbe({ url, settings, canProbe, probeResult }) {
 
 async function canProbeUrl(url) {
   try {
-    if (!chrome.permissions || !chrome.permissions.contains) return false;
     const u = new URL(url || "");
     if (u.protocol === "file:") {
       return await isFileSchemeAllowed();
     }
     if (!["http:", "https:", "ftp:"].includes(u.protocol)) return false;
     const origin = `${u.origin}/*`;
-    return await new Promise(resolve => {
-      chrome.permissions.contains({ origins: [origin] }, (ok) => resolve(!!ok));
-    });
+    return await permissionsContains({ origins: [origin] });
   } catch {
     return false;
   }

@@ -18,6 +18,12 @@ import {
   markTraceStarted
 } from './orchestratorUtils.js';
 import { REASONS } from './reasons.js';
+import {
+  downloadsDownload,
+  permissionsContains,
+  tabsGet,
+  storageLocalSet
+} from './chromeApi.js';
 
 async function startDownloadWithBookkeeping(p, settings, batchDate, hasSizeRule, f, closeOnStart = false) {
   const filename = buildFilename(settings.filenamePattern, {
@@ -35,12 +41,12 @@ async function startDownloadWithBookkeeping(p, settings, batchDate, hasSizeRule,
     bypassFilters: !!p.bypassFilters,
     triggered: !!p.triggered
   });
-  const downloadId = await chrome.downloads.download({
+  const downloadId = await downloadsDownload({
     url: p.url,
     filename,
     saveAs: false,
     conflictAction: 'uniquify'
-  }).catch(() => null);
+  });
 
   if (typeof downloadId === 'number') {
     if (p.tabId != null) await setDownloadTabMapping(downloadId, p.tabId, p.tabUrl || "", p.url, closeOnStart);
@@ -55,10 +61,7 @@ async function hasHostPermissionsForWhitelist(settings) {
   try {
     const patterns = Array.isArray(settings.allowedOrigins) ? settings.allowedOrigins.filter(Boolean) : [];
     if (!patterns.length) return false;
-    const ok = await new Promise(resolve => {
-      chrome.permissions.contains({ origins: patterns }, resolve);
-    });
-    return !!ok;
+    return await permissionsContains({ origins: patterns });
   } catch {
     return false;
   }
@@ -106,9 +109,7 @@ async function finalizeTaskFailure(taskId, reason, { retryOnComplete = false } =
 
 async function saveRunTrace(trace) {
   try {
-    if (chrome.storage?.local) {
-      await chrome.storage.local.set({ dmtLastRunTrace: trace });
-    }
+    await storageLocalSet({ dmtLastRunTrace: trace });
   } catch {}
 }
 
@@ -183,7 +184,7 @@ export async function runDownload({ mode }) {
       markTraceDuplicate(traceCtx, entry.tab?.id);
       if ((settings.autoCloseOnStart || settings.closeTabAfterDownload) && typeof entry.tab?.id === "number") {
         try {
-          const tab = await chrome.tabs.get(entry.tab.id);
+          const tab = await tabsGet(entry.tab.id);
           if (!tab || tab.url !== entry.tab.url) continue;
           await closeTabRespectingWindow(entry.tab.id, settings);
         } catch {}
@@ -219,7 +220,7 @@ export async function runTaskForTab(tabOrId, taskId, opts = {}) {
   try { await hasHostPermissionsForWhitelist(settings); } catch {}
   let tab = tabOrId;
   if (typeof tabOrId === 'number') {
-    try { tab = await chrome.tabs.get(tabOrId); } catch { return; }
+    try { tab = await tabsGet(tabOrId); } catch { return; }
   }
   if (!tab || !tab.url) {
     if (taskId) await updateTask(taskId, { status: "failed", lastError: REASONS.NO_TAB });

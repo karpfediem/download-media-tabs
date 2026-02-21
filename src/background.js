@@ -8,20 +8,31 @@ import { hasActiveDownloadForTab } from './downloadsState.js';
 import './downloadsState.js'; // side-effect: installs downloads onChanged listener
 import { isFileSchemeAllowed } from './fileAccess.js';
 import { REASONS } from './reasons.js';
+import {
+  addRuntimeOnInstalledListener,
+  addRuntimeOnStartupListener,
+  runtimeOpenOptionsPage,
+  storageLocalSet,
+  storageSyncGet,
+  addStorageOnChangedListener,
+  addTabsOnRemovedListener,
+  addTabsOnUpdatedListener,
+  tabsGet,
+  tabsCreate,
+  addRuntimeOnMessageListener
+} from './chromeApi.js';
 
 // Initialize context menus on install/startup
-chrome.runtime.onInstalled.addListener((details) => {
+addRuntimeOnInstalledListener((details) => {
   try { setDefaultContextMenus(); } catch {}
   if (details?.reason === 'install') {
     // Mark first-install so the Options page can show a welcome toast
-    chrome.storage?.local?.set({ shouldShowWelcome: true, firstInstallAt: Date.now() });
+    storageLocalSet({ shouldShowWelcome: true, firstInstallAt: Date.now() });
     // Open the Options page on first install
-    if (chrome.runtime?.openOptionsPage) {
-      chrome.runtime.openOptionsPage();
-    }
+    runtimeOpenOptionsPage();
   }
 });
-chrome.runtime.onStartup.addListener(setDefaultContextMenus);
+addRuntimeOnStartupListener(setDefaultContextMenus);
 
 // Wire action and context menu clicks to orchestrator
 installActionClick(runDownload);
@@ -38,7 +49,7 @@ const manualRetryByTabId = new Map();
 
 async function refreshAutoRunSetting() {
   try {
-    const obj = await chrome.storage.sync.get({
+    const obj = await storageSyncGet({
       autoRunOnNewTabs: false,
       autoRunTiming: "start",
       autoCloseOnStart: false,
@@ -111,7 +122,7 @@ async function processPendingTasks() {
   if (!pending.length) return;
   for (const task of pending) {
     let tab;
-    try { tab = await chrome.tabs.get(task.tabId); } catch { continue; }
+    try { tab = await tabsGet(task.tabId); } catch { continue; }
     if (!tab || tab.url !== task.url) continue;
     if (autoRunTiming === "complete" && tab.status !== "complete") continue;
     if (autoRunTiming === "start" && tab.status !== "loading" && tab.status !== "complete") continue;
@@ -129,11 +140,11 @@ try {
 } catch {}
 
 // Initialize setting on startup and install
-chrome.runtime.onStartup.addListener(refreshAutoRunSetting);
-chrome.runtime.onInstalled.addListener(refreshAutoRunSetting);
+addRuntimeOnStartupListener(refreshAutoRunSetting);
+addRuntimeOnInstalledListener(refreshAutoRunSetting);
 
 // React to settings changes
-chrome.storage.onChanged.addListener((changes, area) => {
+addStorageOnChangedListener((changes, area) => {
   if (area !== 'sync' || !changes) return;
   if (Object.prototype.hasOwnProperty.call(changes, 'autoRunOnNewTabs')) {
     autoRunEnabled = !!(changes.autoRunOnNewTabs.newValue);
@@ -156,7 +167,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
 });
 
 // Clean up cache when tab is removed
-chrome.tabs.onRemoved.addListener((tabId) => {
+addTabsOnRemovedListener((tabId) => {
   lastProcessedUrlByTab.delete(tabId);
   manualRetryByTabId.delete(tabId);
   try {
@@ -166,7 +177,7 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   } catch {}
 });
 
-chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+addTabsOnUpdatedListener(async (tabId, changeInfo, tab) => {
   // Ensure we have loaded the setting at least once in this SW lifetime
   if (!autoRunLoaded) {
     try { await refreshAutoRunSetting(); } catch {}
@@ -183,7 +194,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   }
 });
 
-chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+addRuntimeOnMessageListener((msg, sender, sendResponse) => {
   if (!msg || typeof msg !== "object") return;
   if (msg.type === "dmt_retry_task") {
     const taskId = msg.taskId;
@@ -191,7 +202,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       const task = await getTaskById(taskId);
       if (!task || !task.url) return;
       await updateTask(task.id, { status: "pending", lastError: "" });
-      const tab = await chrome.tabs.create({ url: task.url, active: false });
+      const tab = await tabsCreate({ url: task.url, active: false });
       if (tab && typeof tab.id === "number") {
         manualRetryByTabId.set(tab.id, task.id);
       }
@@ -200,7 +211,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 });
 
-chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+addTabsOnUpdatedListener(async (tabId, changeInfo, tab) => {
   const taskId = manualRetryByTabId.get(tabId);
   if (!taskId) return;
   if (changeInfo.status !== "complete") return;

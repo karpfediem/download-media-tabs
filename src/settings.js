@@ -1,5 +1,6 @@
 import { DEFAULT_SETTINGS } from './constants.js';
+import { storageSyncGet } from './chromeApi.js';
 
 export async function getSettings() {
-  return new Promise((resolve) => chrome.storage.sync.get(DEFAULT_SETTINGS, resolve));
+  return storageSyncGet(DEFAULT_SETTINGS);
 }
