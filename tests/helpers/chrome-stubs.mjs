@@ -83,11 +83,27 @@ export function createTabsStub({ get, query, remove, create } = {}) {
   };
 }
 
+export function createAlarmsStub({ onAlarmListeners, createCalls, clearCalls } = {}) {
+  return {
+    create: (name, info) => {
+      if (createCalls) createCalls.push({ name, info });
+    },
+    clear: (name, cb) => {
+      if (clearCalls) clearCalls.push(name);
+      if (typeof cb === "function") cb(true);
+    },
+    onAlarm: {
+      addListener: (fn) => { if (onAlarmListeners) onAlarmListeners.push(fn); }
+    }
+  };
+}
+
 export function createChromeBase({
   storageFixture,
   storageOnChangedListeners,
   downloads,
   tabs,
+  alarms,
   permissionsOk = false,
   runtimeLastError = null,
   scriptingExecuteScript,
@@ -97,6 +113,7 @@ export function createChromeBase({
     storage: storageFixture ? storageFixture.makeChromeStorage({ onChangedListeners: storageOnChangedListeners }) : undefined,
     downloads: downloads || createDownloadsStub(),
     tabs: tabs || createTabsStub(),
+    alarms: alarms || createAlarmsStub(),
     permissions: {
       contains: (_query, cb) => cb(!!permissionsOk)
     },

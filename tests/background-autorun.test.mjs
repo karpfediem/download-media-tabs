@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createStorageFixture, createDownloadsStub, createTabsStub, createChromeBase, ref } from "./helpers/chrome-stubs.mjs";
+import { createStorageFixture, createDownloadsStub, createTabsStub, createChromeBase, createAlarmsStub, ref } from "./helpers/chrome-stubs.mjs";
 import { resetTasksStorage } from "./helpers/tasks-helpers.mjs";
 import { resetDownloadsState } from "./helpers/downloads-state-helpers.mjs";
 import { withMutedConsole } from "./helpers/console-mute.mjs";
@@ -17,13 +17,16 @@ function createChromeStub({ sync = {}, permissionsOk = false, executeScriptThrow
     storageChanged: [],
     actionClicked: [],
     contextMenuClicked: [],
-    downloadsChanged: []
+    downloadsChanged: [],
+    alarms: []
   };
   const calls = {
     downloads: [],
     tabsCreate: [],
     tabsRemove: [],
-    contextMenusCreate: 0
+    contextMenusCreate: 0,
+    alarmsCreate: [],
+    alarmsClear: []
   };
   const storageFixture = createStorageFixture({ sync });
   const storage = storageFixture.storage;
@@ -58,11 +61,18 @@ function createChromeStub({ sync = {}, permissionsOk = false, executeScriptThrow
     }
   });
 
+  const alarms = createAlarmsStub({
+    onAlarmListeners: listeners.alarms,
+    createCalls: calls.alarmsCreate,
+    clearCalls: calls.alarmsClear
+  });
+
   const chromeBase = createChromeBase({
     storageFixture,
     storageOnChangedListeners: listeners.storageChanged,
     downloads,
     tabs: tabsApi,
+    alarms,
     permissionsOk,
     scriptingExecuteScript: async () => {
       if (executeScriptThrows) throw new Error("probe failed");
@@ -234,6 +244,55 @@ async function tick() {
 
   const tasks = await tasksState.getTasks();
   assert.equal(tasks.length, 0);
+}
+
+// 6) manual start runs pending task on existing tab
+{
+  const env = createChromeStub({
+    sync: { autoRunOnNewTabs: false, autoRunTiming: "start", autoCloseOnStart: false, strictSingleDetection: false }
+  });
+  await resetTasksStorage();
+  resetDownloadsState(downloadsState);
+  await importBackground("manual-start");
+  await tick();
+
+  const tab = { id: 8, url: "https://example.com/manual.jpg", status: "complete", windowId: 1 };
+  env.tabsById.set(8, tab);
+  const task = await tasksState.upsertTask({ tabId: 8, url: tab.url, kind: "manual" });
+  await tasksState.updateTask(task.id, { status: "pending", lastError: "" });
+
+  for (const fn of env.listeners.runtimeMessage) {
+    fn({ type: "dmt_start_task", taskId: task.id }, null, () => {});
+  }
+  await tick();
+
+  const tasks = await tasksState.getTasks();
+  assert.equal(env.calls.downloads.length, 1);
+  assert.equal(tasks[0].downloadId > 0, true);
+}
+
+// 7) alarm processing runs pending auto tasks
+{
+  const env = createChromeStub({
+    sync: { autoRunOnNewTabs: true, autoRunTiming: "start", autoCloseOnStart: false, strictSingleDetection: false }
+  });
+  await resetTasksStorage();
+  resetDownloadsState(downloadsState);
+  await importBackground("pending-alarm");
+  await tick();
+
+  const tab = { id: 9, url: "https://example.com/alarm.jpg", status: "loading", windowId: 1 };
+  env.tabsById.set(9, tab);
+  await tasksState.upsertTask({ tabId: 9, url: tab.url, kind: "auto" });
+
+  for (const fn of env.listeners.alarms) {
+    await fn({ name: "dmt-pending-tasks" });
+  }
+  await tick();
+
+  const tasks = await tasksState.getTasks();
+  assert.equal(env.calls.downloads.length, 1);
+  assert.equal(tasks[0].downloadId > 0, true);
 }
 
 console.log("background-autorun.test.mjs passed");
