@@ -2,6 +2,7 @@
 // Saves everything to chrome.storage.sync using DEFAULTS that come from shared src/constants.js.
 
 import { DEFAULT_SETTINGS as DEFAULTS } from "../src/constants.js";
+import { getTasks, clearTasksByStatus } from "../src/tasksState.js";
 
 // ---------- Utilities ----------
 
@@ -165,7 +166,7 @@ function sanitizeSettingsInput(input) {
 
 // ---------- Tabs (accessible) ----------
 
-const tabIds = ["general", "automation", "detection", "performance", "theme", "presets", "about"];
+const tabIds = ["general", "automation", "tasks", "detection", "performance", "theme", "presets", "about"];
 function initTabs() {
     const tabs = tabIds.map(id => ({
         tab: $(`tab-${id}`),
@@ -634,6 +635,70 @@ function showToast(message, type = 'info', duration = 1600) {
     }
 }
 
+// ---------- Tasks ----------
+
+function formatTaskTime(ts) {
+    if (!ts) return "";
+    try { return new Date(ts).toLocaleString(); } catch { return ""; }
+}
+
+function taskMatchesFilters(task, status, text) {
+    if (!task) return false;
+    if (status && status !== "all" && task.status !== status) return false;
+    if (text) {
+        const hay = String(task.url || "").toLowerCase();
+        if (!hay.includes(text)) return false;
+    }
+    return true;
+}
+
+async function renderTasks() {
+    const table = $("tasksTable");
+    const body = $("tasksTbody");
+    const empty = $("tasksEmpty");
+    if (!table || !body || !empty) return;
+
+    const tasks = await getTasks();
+    const status = $("taskFilterStatus")?.value || "all";
+    const text = String($("taskFilterText")?.value || "").trim().toLowerCase();
+    const filtered = tasks.filter(t => taskMatchesFilters(t, status, text));
+
+    body.innerHTML = "";
+    if (!filtered.length) {
+        table.style.display = "none";
+        empty.style.display = "";
+        return;
+    }
+    table.style.display = "";
+    empty.style.display = "none";
+
+    filtered.forEach(task => {
+        const tr = document.createElement("tr");
+        const tdStatus = document.createElement("td");
+        tdStatus.textContent = task.status || "";
+        const tdUrl = document.createElement("td");
+        tdUrl.className = "url";
+        tdUrl.textContent = task.url || "";
+        const tdUpdated = document.createElement("td");
+        tdUpdated.textContent = formatTaskTime(task.updatedAt || task.createdAt);
+        const tdActions = document.createElement("td");
+        tdActions.className = "actions";
+        if (task.status === "failed") {
+            const btn = document.createElement("button");
+            btn.className = "task-btn";
+            btn.textContent = "Retry";
+            btn.dataset.action = "retryTask";
+            btn.dataset.taskId = task.id;
+            tdActions.appendChild(btn);
+        }
+        tr.appendChild(tdStatus);
+        tr.appendChild(tdUrl);
+        tr.appendChild(tdUpdated);
+        tr.appendChild(tdActions);
+        body.appendChild(tr);
+    });
+}
+
 // ---------- Wire up ----------
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -641,6 +706,7 @@ document.addEventListener("DOMContentLoaded", () => {
     load();
     updatePatternPreview();
     loadPresetsUI();
+    renderTasks();
 
     // Show a welcome note on first install (triggered by background via storage.local)
     try {
@@ -666,6 +732,14 @@ document.addEventListener("DOMContentLoaded", () => {
         if (id === "exportSettings") exportSettings();
         if (id === "importSettings") $("importFile").click();
         if (id === "savePreset") saveCurrentAsPreset();
+        if (id === "taskClearCompleted") {
+            clearTasksByStatus("completed").then(renderTasks);
+            return;
+        }
+        if (id === "taskClearFailed") {
+            clearTasksByStatus("failed").then(renderTasks);
+            return;
+        }
         if (id === "resetInferUrlAllowedExtensions") {
             $("inferUrlAllowedExtensions").value = (DEFAULTS.inferUrlAllowedExtensions || []).join("\n");
             updateSaveEnabled();
@@ -681,6 +755,14 @@ document.addEventListener("DOMContentLoaded", () => {
             });
             return;
         }
+        if (t.dataset?.action === "retryTask") {
+            const taskId = t.dataset.taskId;
+            if (taskId) {
+                chrome.runtime.sendMessage({ type: "dmt_retry_task", taskId });
+                showToast("Retry queued.", "info", 1200);
+            }
+            return;
+        }
         if (t.dataset?.action === 'applyPreset') applyPresetByName(t.dataset.name);
         if (t.dataset?.action === 'deletePreset') deletePresetByName(t.dataset.name);
     });
@@ -692,6 +774,9 @@ document.addEventListener("DOMContentLoaded", () => {
         if (ev.target?.id === 'filtersEnabled') reflectFiltersEnabledState();
         updateSaveEnabled();
     }, true);
+
+    $("taskFilterStatus")?.addEventListener("change", renderTasks);
+    $("taskFilterText")?.addEventListener("input", renderTasks);
 
     $("importFile")?.addEventListener('change', (ev) => {
         const file = ev.target?.files?.[0];
@@ -718,4 +803,10 @@ document.addEventListener("DOMContentLoaded", () => {
             if (t === 'system') applyTheme('system');
         });
     }
+
+    chrome.storage?.onChanged?.addListener((changes, area) => {
+        if (area === "local" && changes && Object.prototype.hasOwnProperty.call(changes, "dmtTasks")) {
+            renderTasks();
+        }
+    });
 });

@@ -209,6 +209,27 @@ input:focus-visible, textarea:focus-visible, select:focus-visible{
 @media (max-width:900px){ .grid2{ grid-template-columns:1fr; } }
 
 .note{ color:var(--muted); font-size:12px; }
+.tasks-table{
+    width:100%;
+    border-collapse:collapse;
+    font-size:12px;
+    margin-top:8px;
+}
+.tasks-table th,
+.tasks-table td{
+    text-align:left;
+    padding:6px 8px;
+    border-bottom:1px solid var(--border);
+    vertical-align:top;
+}
+.tasks-table th{ color:var(--ctp-subtext1); font-weight:650; }
+.tasks-table td.url{ word-break:break-all; }
+.tasks-table td.actions{ white-space:nowrap; }
+button.task-btn{
+    padding:4px 8px;
+    border-radius:8px;
+    font-size:12px;
+}
 .warning{
     display:block; border:1px solid var(--ctp-yellow);
     background: color-mix(in srgb, var(--ctp-yellow) 14%, transparent);

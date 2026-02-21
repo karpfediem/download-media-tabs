@@ -1,5 +1,6 @@
 import { getSettings } from './settings.js';
 import { closeTabRespectingWindow } from './closeTab.js';
+import { updateTaskByDownloadId } from './tasksState.js';
 
 const SESSION_KEY = "dmtDownloadState";
 
@@ -122,6 +123,7 @@ chrome.downloads.onChanged.addListener(async (delta) => {
       if (tabId != null && settings.closeTabAfterDownload) {
         await closeTabRespectingWindow(tabId, settings);
       }
+      await updateTaskByDownloadId(id, { status: "completed" });
     } finally {
       await clearDownloadTabMapping(id);
     }
@@ -130,5 +132,6 @@ chrome.downloads.onChanged.addListener(async (delta) => {
   if (delta.error || (delta.state && delta.state.current === "interrupted")) {
     await clearPendingSizeConstraint(id);
     await clearDownloadTabMapping(id);
+    await updateTaskByDownloadId(id, { status: "failed", lastError: "interrupted" });
   }
 });

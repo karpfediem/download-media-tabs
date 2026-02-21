@@ -28,6 +28,7 @@
         <div class="tablist" role="tablist" aria-label="Settings tabs">
             <button class="tabbtn" role="tab" id="tab-general"     aria-controls="panel-general"     aria-selected="true"  tabindex="0">General</button>
             <button class="tabbtn" role="tab" id="tab-automation" aria-controls="panel-automation" aria-selected="false" tabindex="-1">Automation</button>
+            <button class="tabbtn" role="tab" id="tab-tasks"      aria-controls="panel-tasks"      aria-selected="false" tabindex="-1">Tasks</button>
             <button class="tabbtn" role="tab" id="tab-detection"   aria-controls="panel-detection"   aria-selected="false" tabindex="-1">Detection</button>
             <button class="tabbtn" role="tab" id="tab-performance" aria-controls="panel-performance" aria-selected="false" tabindex="-1">Performance</button>
             <button class="tabbtn" role="tab" id="tab-theme"       aria-controls="panel-theme"       aria-selected="false" tabindex="-1">Theme</button>
@@ -280,7 +281,7 @@
                         </label>
                     </div>
                     <label class="inline"><input type="checkbox" id="autoCloseOnStart"> Close tab immediately after download starts</label>
-                    <p class="note">When enabled, as a new tab finishes loading, the extension will try to download it if it’s a direct single-media page. Respects all filters and post-actions.</p>
+                    <p class="note">When enabled, the extension will try to download new tabs based on the timing above. Respects all filters and post-actions.</p>
                 </fieldset>
                 <fieldset>
                     <legend>Post actions</legend>
@@ -290,6 +291,42 @@
                         For silent bulk downloads, disable <em>Ask where to save each file before downloading</em> at
                         <span class="kbd">chrome://settings/downloads</span>.
                     </p>
+                </fieldset>
+            </section>
+
+            <!-- Tasks -->
+            <section class="panel" id="panel-tasks" role="tabpanel" aria-labelledby="tab-tasks" hidden>
+                <fieldset>
+                    <legend>Task queue</legend>
+                    <div class="row">
+                        <label>Filter status
+                            <select id="taskFilterStatus">
+                                <option value="all">All</option>
+                                <option value="pending">Pending</option>
+                                <option value="started">Started</option>
+                                <option value="failed">Failed</option>
+                                <option value="completed">Completed</option>
+                            </select>
+                        </label>
+                        <label>Search URL
+                            <input id="taskFilterText" type="text" placeholder="Filter by URL substring">
+                        </label>
+                        <button id="taskClearCompleted" type="button">Clear completed</button>
+                        <button id="taskClearFailed" type="button">Clear failed</button>
+                    </div>
+                    <div id="tasksEmpty" class="note">No tasks yet.</div>
+                    <table class="tasks-table" id="tasksTable">
+                        <thead>
+                            <tr>
+                                <th>Status</th>
+                                <th>URL</th>
+                                <th>Updated</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tasksTbody"></tbody>
+                    </table>
+                    <p class="note">Retry opens the URL in a background tab and re‑attempts the download.</p>
                 </fieldset>
             </section>
 
