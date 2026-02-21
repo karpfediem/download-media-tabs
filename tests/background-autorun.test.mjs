@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createStorageFixture, createDownloadsStub, createTabsStub, createChromeBase, ref } from "./helpers/chrome-stubs.mjs";
 import { resetTasksStorage } from "./helpers/tasks-helpers.mjs";
+import { resetDownloadsState } from "./helpers/downloads-state-helpers.mjs";
 
 const tasksState = await import("../src/tasksState.js");
 const downloadsState = await import("../src/downloadsState.js");
@@ -111,8 +112,7 @@ async function tick() {
     sync: { autoRunOnNewTabs: true, autoRunTiming: "start", autoCloseOnStart: false, strictSingleDetection: false }
   });
   await resetTasksStorage();
-  downloadsState.downloadIdToMeta.clear();
-  downloadsState.pendingSizeConstraints.clear();
+  resetDownloadsState(downloadsState);
   await importBackground("auto-start");
   await tick();
 
@@ -136,8 +136,7 @@ async function tick() {
     executeScriptThrows: true
   });
   await resetTasksStorage();
-  downloadsState.downloadIdToMeta.clear();
-  downloadsState.pendingSizeConstraints.clear();
+  resetDownloadsState(downloadsState);
   await importBackground("auto-retry");
   await tick();
 
@@ -160,8 +159,7 @@ async function tick() {
     sync: { autoRunOnNewTabs: false, autoRunTiming: "start", autoCloseOnStart: false, strictSingleDetection: false }
   });
   await resetTasksStorage();
-  downloadsState.downloadIdToMeta.clear();
-  downloadsState.pendingSizeConstraints.clear();
+  resetDownloadsState(downloadsState);
   await importBackground("manual-retry");
   await tick();
 

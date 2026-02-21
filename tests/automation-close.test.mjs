@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { createStorageFixture, createDownloadsStub, createTabsStub, createChromeBase, ref } from "./helpers/chrome-stubs.mjs";
 import { resetTasksStorage, createTaskWithDownloadId } from "./helpers/tasks-helpers.mjs";
+import { setupPostDownloadSizeConstraint } from "./helpers/size-filter-helpers.mjs";
+import { resetDownloadsState } from "./helpers/downloads-state-helpers.mjs";
 
 const onChangedListener = ref(null);
 let currentTabs = [];
@@ -24,8 +26,9 @@ function resetState() {
   storage.sync = {};
   storage.local = {};
   storage.session = {};
-  if (downloadIdToMeta) downloadIdToMeta.clear();
-  if (pendingSizeConstraints) pendingSizeConstraints.clear();
+  if (downloadIdToMeta && pendingSizeConstraints) {
+    resetDownloadsState({ downloadIdToMeta, pendingSizeConstraints });
+  }
 }
 
 const downloads = createDownloadsStub({
@@ -94,8 +97,13 @@ const { runDownload } = await import("../src/downloadOrchestrator.js");
   await resetTasksStorage();
   storage.sync = { closeTabAfterDownload: false, keepWindowOpenOnLastTabClose: false };
   await createTaskWithDownloadId({ tabId: 1, url: "https://example.com/file.jpg", downloadId: 42 });
-  await setPendingSizeConstraint(42, { minBytes: 0, maxBytes: 100 });
-  searchResults.set(42, [{ id: 42, fileSize: 1024, bytesReceived: 1024 }]);
+  await setupPostDownloadSizeConstraint({
+    setPendingSizeConstraint,
+    searchResults,
+    downloadId: 42,
+    maxBytes: 100,
+    fileSize: 1024
+  });
   const before = await getTasks();
   assert.equal(before.length, 1);
 

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createStorageFixture, createDownloadsStub, createTabsStub, createChromeBase, ref } from "./helpers/chrome-stubs.mjs";
 import { resetTasksStorage, createTaskWithDownloadId } from "./helpers/tasks-helpers.mjs";
+import { resetDownloadsState } from "./helpers/downloads-state-helpers.mjs";
 
 const onChangedListener = ref(null);
 const tabsById = new Map();
@@ -22,8 +23,7 @@ function resetState(downloadsState) {
   storage.sync = {};
   storage.local = {};
   storage.session = {};
-  downloadsState.downloadIdToMeta.clear();
-  downloadsState.pendingSizeConstraints.clear();
+  resetDownloadsState(downloadsState);
 }
 
 const downloads = createDownloadsStub({

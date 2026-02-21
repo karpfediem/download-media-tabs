@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { runDownload } from "../src/downloadOrchestrator.js";
 import { DEFAULT_SETTINGS } from "../src/constants.js";
 import { setupRunDownloadFixture } from "./helpers/run-download-fixture.mjs";
+import { contentLengthForUrlFromMap } from "./helpers/size-filter-helpers.mjs";
 
 const tabs = [
   { id: 1, url: "https://blocked.com/a.jpg", windowId: 1 },
@@ -10,6 +11,9 @@ const tabs = [
   { id: 4, url: "https://example.com/small.jpg", windowId: 1 }
 ];
 
+const lengthMap = new Map([
+  ["https://example.com/small.jpg", 50]
+]);
 const { storage } = setupRunDownloadFixture({
   tabs,
   sync: {
@@ -23,7 +27,7 @@ const { storage } = setupRunDownloadFixture({
       minBytes: 100
     }
   },
-  contentLengthForUrl: (url) => (String(url).includes("small") ? 50 : 1000)
+  contentLengthForUrl: contentLengthForUrlFromMap(lengthMap, 1000)
 });
 
 await runDownload({ mode: "currentWindow" });
