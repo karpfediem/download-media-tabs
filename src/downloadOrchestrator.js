@@ -4,12 +4,11 @@ import { selectCandidateTabs } from './selection.js';
 import { buildFilename, lastPathSegment } from './urlUtils.js';
 import { DEFAULT_SETTINGS } from './constants.js';
 import { sizeWithin, headContentLength } from './headSize.js';
-import { decideTab } from './decide.js';
 import { setDownloadTabMapping, setPendingSizeConstraint } from './downloadsState.js';
 import { upsertTask, updateTask, getTaskById, removeTask } from './tasksState.js';
 import { isFileSchemeAllowed } from './fileAccess.js';
-import { planFromDecision } from './plan.js';
 import { markDuplicatesByUrl } from './taskUtils.js';
+import { evaluateTabForPlan, createTaskEntriesFromEvaluated } from './taskPipeline.js';
 
 async function startDownloadWithBookkeeping(p, settings, batchDate, hasSizeRule, f, closeOnStart = false) {
   const filename = buildFilename(settings.filenamePattern, {
@@ -54,16 +53,6 @@ async function ensureHostPermissionsFromWhitelist(settings) {
   } catch {
     return false;
   }
-}
-
-async function evaluateTaskForTab(tab, settings) {
-  const decision = await decideTab(tab, settings).catch(() => null);
-  if (!decision || !decision.shouldDownload || !decision.downloadUrl) {
-    return { ok: false, reason: decision?.reason || "filtered" };
-  }
-  const plan = planFromDecision(decision, settings, tab.id);
-  if (!plan) return { ok: false, reason: "filtered" };
-  return { ok: true, plan };
 }
 
 async function startDownloadForPlan(plan, settings, batchDate, closeOnStart = false) {
@@ -138,11 +127,7 @@ export async function runDownload({ mode }) {
   const limitDl = pLimit(Math.max(1, settings.downloadConcurrency | 0));
 
   const evaluated = await Promise.allSettled(candidateTabs.map(tab => limitProbe(async () => {
-    const result = await evaluateTaskForTab(tab, settings);
-    if (!result.ok) {
-      return { tab, ok: false, reason: result.reason || "filtered" };
-    }
-    return { tab, ok: true, plan: result.plan };
+    return await evaluateTabForPlan(tab, settings);
   })));
 
   const reasonCounts = new Map();
@@ -197,9 +182,13 @@ export async function runDownload({ mode }) {
   const taskEntries = [];
   for (const key of order) {
     const group = groups.get(key) || [];
-    for (const entry of group) {
-      const task = await upsertTask({ tabId: entry.tab.id, url: entry.tab.url, kind: "manual" });
-      taskEntries.push({ ...entry, task, isDuplicate: false, groupKey: key });
+    const created = await createTaskEntriesFromEvaluated(
+      group.map(entry => ({ ...entry, ok: true })),
+      upsertTask,
+      "manual"
+    );
+    for (const entry of created) {
+      taskEntries.push({ ...entry, isDuplicate: false, groupKey: key });
     }
   }
 
@@ -281,7 +270,7 @@ export async function runTaskForTab(tabOrId, taskId, opts = {}) {
     await updateTask(taskId, { status: "started", attempts, lastAttemptAt: Date.now() });
   }
 
-  const result = await evaluateTaskForTab(tab, settings);
+  const result = await evaluateTabForPlan(tab, settings);
   if (!result.ok) {
     if (taskId) {
       const reason = result.reason || "filtered";
