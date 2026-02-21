@@ -6,6 +6,8 @@ const tabsById = new Map();
 const removedTabs = [];
 const downloadCalls = [];
 let nextDownloadId = 1;
+let downloadIdToMeta = null;
+let pendingSizeConstraints = null;
 
 const storage = {
   sync: {},
@@ -22,6 +24,8 @@ function resetState() {
   storage.sync = {};
   storage.local = {};
   storage.session = {};
+  if (downloadIdToMeta) downloadIdToMeta.clear();
+  if (pendingSizeConstraints) pendingSizeConstraints.clear();
 }
 
 function getFromStore(area, defaults) {
@@ -88,7 +92,10 @@ globalThis.chrome = {
 };
 
 const downloadsState = await import("../src/downloadsState.js");
-const { setDownloadTabMapping, downloadIdToMeta } = downloadsState;
+const { setDownloadTabMapping, setPendingSizeConstraint } = downloadsState;
+({ downloadIdToMeta, pendingSizeConstraints } = downloadsState);
+const tasksState = await import("../src/tasksState.js");
+const { upsertTask, updateTask, getTasks } = tasksState;
 const { runDownload } = await import("../src/downloadOrchestrator.js");
 
 // 1) Close-on-start uses tabUrl as the guard (not download URL)
@@ -123,6 +130,22 @@ const { runDownload } = await import("../src/downloadOrchestrator.js");
 
   await runDownload({ mode: "currentWindow" });
   assert.deepEqual(removedTabs, [2]);
+}
+
+// 3) Post-download size limits should remove the task (filtered)
+{
+  resetState();
+  storage.sync = { closeTabAfterDownload: false, keepWindowOpenOnLastTabClose: false };
+  const task = await upsertTask({ tabId: 1, url: "https://example.com/file.jpg", kind: "manual" });
+  await updateTask(task.id, { downloadId: 42, status: "started" });
+  await setPendingSizeConstraint(42, { minBytes: 0, maxBytes: 100 });
+  const before = await getTasks();
+  assert.equal(before.length, 1);
+
+  await onChangedListener({ id: 42, state: { current: "complete" } });
+
+  const after = await getTasks();
+  assert.equal(after.length, 0);
 }
 
 console.log("automation-close.test.mjs passed");
