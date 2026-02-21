@@ -7,5 +7,6 @@ await import("./downloads-state.test.mjs");
 await import("./selection.test.mjs");
 await import("./background-autorun.test.mjs");
 await import("./decision-edge.test.mjs");
+await import("./run-download-trace.test.mjs");
 
 console.log("All tests passed.");
