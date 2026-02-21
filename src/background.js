@@ -7,6 +7,7 @@ import { upsertTask, updateTask, getTasks, getTaskById, markTasksForClosedTab } 
 import { hasActiveDownloadForTab } from './downloadsState.js';
 import './downloadsState.js'; // side-effect: installs downloads onChanged listener
 import { isFileSchemeAllowed } from './fileAccess.js';
+import { REASONS } from './reasons.js';
 
 // Initialize context menus on install/startup
 chrome.runtime.onInstalled.addListener((details) => {
@@ -65,7 +66,7 @@ async function runAutoTaskForTab(tab, task, phase) {
   } catch {
     await updateTask(task.id, {
       status: retryOnComplete ? "pending" : "failed",
-      lastError: "no-download"
+      lastError: REASONS.NO_DOWNLOAD
     });
   }
 }
@@ -88,13 +89,13 @@ async function handleAutoRun(tab, phase) {
   if (task.status !== "pending") return;
 
   const prevUrl = lastProcessedUrlByTab.get(tab.id);
-  if (prevUrl === tab.url && task.lastError !== "no-download") return;
+  if (prevUrl === tab.url && task.lastError !== REASONS.NO_DOWNLOAD) return;
 
-  if (phase === "start" && task.lastError === "no-download") return;
+  if (phase === "start" && task.lastError === REASONS.NO_DOWNLOAD) return;
 
   const shouldRun =
     (autoRunTiming === phase) ||
-    (phase === "complete" && task.lastError === "no-download");
+    (phase === "complete" && task.lastError === REASONS.NO_DOWNLOAD);
 
   if (!shouldRun) return;
 
@@ -114,7 +115,7 @@ async function processPendingTasks() {
     if (!tab || tab.url !== task.url) continue;
     if (autoRunTiming === "complete" && tab.status !== "complete") continue;
     if (autoRunTiming === "start" && tab.status !== "loading" && tab.status !== "complete") continue;
-    if (autoRunTiming === "start" && tab.status === "complete" && task.lastError !== "no-download") {
+    if (autoRunTiming === "start" && tab.status === "complete" && task.lastError !== REASONS.NO_DOWNLOAD) {
       continue;
     }
     await runAutoTaskForTab(tab, task, (autoRunTiming === "start" ? "start" : "complete"));

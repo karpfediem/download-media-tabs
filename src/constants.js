@@ -1,3 +1,5 @@
+/** @typedef {import('./types.js').Settings} Settings */
+
 export const MEDIA_EXTENSIONS = new Map([
   ["jpg", "image/jpeg"], ["jpeg", "image/jpeg"], ["jpe", "image/jpeg"],
   ["png", "image/png"], ["gif", "image/gif"], ["webp", "image/webp"],
@@ -14,6 +16,7 @@ export const MEDIA_EXTENSION_SET = new Set([...MEDIA_EXTENSIONS.keys()]);
 export const IMAGE_EXTENSION_SET = new Set(["jpg","jpeg","jpe","png","gif","webp","bmp","tif","tiff","svg","avif"]);
 
 // Constants and MIME/extension helpers
+/** @type {Settings} */
 export const DEFAULT_SETTINGS = {
   includeImages: true,
   includeVideo: true,

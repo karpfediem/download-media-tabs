@@ -1,3 +1,5 @@
+import { REASONS } from "./reasons.js";
+
 const TASKS_KEY = "dmtTasks";
 const TASKS_MAX = 500;
 
@@ -102,7 +104,7 @@ export async function markTasksForClosedTab(tabId) {
     if (t.status !== "pending" && t.status !== "started") return t;
     if (typeof t.downloadId === "number") return t;
     changed = true;
-    return { ...t, status: "failed", lastError: "tab-closed", updatedAt: nowTs };
+    return { ...t, status: "failed", lastError: REASONS.TAB_CLOSED, updatedAt: nowTs };
   });
   if (changed) await saveTasks(next);
 }

@@ -3,15 +3,21 @@ import { extFromUrl, lastPathSegment, absolutePrefer, inferExtensionFromUrlHints
 import { hasActiveDimensionRules, hasAnySubstring } from './filters.js';
 import { probeDocument } from './probe.js';
 import { isFileSchemeAllowed } from './fileAccess.js';
+import { REASONS } from './reasons.js';
 
+/** @typedef {import('./types.js').Settings} Settings */
+/** @typedef {import('./types.js').Decision} Decision */
+/** @typedef {import('./types.js').ProbeResult} ProbeResult */
+
+/** @param {Object} tab @param {Settings} settings */
 export async function decideTab(tab, settings) {
   const url = tab.url || "";
   const canProbe = await canProbeUrl(url);
 
   const base = decideFromProbe({ url, settings, canProbe, probeResult: null });
-  if (base && base.reason !== "probe-needed") return base;
+  if (base && base.reason !== REASONS.PROBE_NEEDED) return base;
 
-  if (!canProbe) return { shouldDownload: false, reason: "no-site-access" };
+  if (!canProbe) return { shouldDownload: false, reason: REASONS.NO_SITE_ACCESS };
 
   try {
     const [{ result }] = await chrome.scripting.executeScript({
@@ -19,13 +25,14 @@ export async function decideTab(tab, settings) {
       func: probeDocument,
       args: [!!settings.strictSingleDetection, Number(settings.coverageThreshold) || 0.5]
     });
-    if (!result) return { shouldDownload: false, reason: "probe-failed" };
+    if (!result) return { shouldDownload: false, reason: REASONS.PROBE_FAILED };
     return decideFromProbe({ url, settings, canProbe, probeResult: result });
   } catch {
-    return { shouldDownload: false, reason: "probe-failed" };
+    return { shouldDownload: false, reason: REASONS.PROBE_FAILED };
   }
 }
 
+/** @param {{url: string, settings: Settings, canProbe: boolean, probeResult: ProbeResult|null}} input @returns {Decision} */
 export function decideFromProbe({ url, settings, canProbe, probeResult }) {
   const strict = !!settings.strictSingleDetection && canProbe;
   const f = Object.assign({}, settings.filters || {});
@@ -46,7 +53,7 @@ export function decideFromProbe({ url, settings, canProbe, probeResult }) {
 
   const needsProbe = () => ({
     shouldDownload: false,
-    reason: canProbe ? "probe-needed" : "no-site-access"
+    reason: canProbe ? REASONS.PROBE_NEEDED : REASONS.NO_SITE_ACCESS
   });
 
   if (triggerMatched) {

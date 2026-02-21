@@ -12,8 +12,10 @@ export function createTraceContext({ mode, candidateCount, now = Date.now() }) {
   };
 }
 
+import { REASONS } from "./reasons.js";
+
 export function recordFilteredTrace(ctx, { tab, reason }) {
-  const safeReason = String(reason || "filtered");
+  const safeReason = String(reason || REASONS.FILTERED);
   ctx.reasonCounts.set(safeReason, (ctx.reasonCounts.get(safeReason) || 0) + 1);
   const entry = {
     tabId: tab?.id,
@@ -64,15 +66,15 @@ export function markTraceDuplicate(ctx, tabId) {
   const entry = ctx.traceByTabId.get(tabId);
   if (!entry) return;
   entry.decision = "skipped";
-  entry.reason = "duplicate";
+  entry.reason = REASONS.DUPLICATE;
 }
 
 export function markTraceFailure(ctx, tabId, reason) {
   if (typeof tabId !== "number") return;
   const entry = ctx.traceByTabId.get(tabId);
   if (!entry) return;
-  const safeReason = reason || "no-download";
-  entry.decision = safeReason === "size-filter" ? "filtered" : "failed";
+  const safeReason = reason || REASONS.NO_DOWNLOAD;
+  entry.decision = safeReason === REASONS.SIZE_FILTER ? REASONS.FILTERED : "failed";
   entry.reason = safeReason;
 }
 

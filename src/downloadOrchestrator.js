@@ -17,6 +17,7 @@ import {
   markTraceFailure,
   markTraceStarted
 } from './orchestratorUtils.js';
+import { REASONS } from './reasons.js';
 
 async function startDownloadWithBookkeeping(p, settings, batchDate, hasSizeRule, f, closeOnStart = false) {
   const filename = buildFilename(settings.filenamePattern, {
@@ -74,7 +75,7 @@ async function startDownloadForPlan(plan, settings, batchDate, closeOnStart = fa
       if (bytes == null || bytes < 0) {
         plan.postSizeEnforce = true;
       } else if (!sizeWithin(bytes, f.minBytes, f.maxBytes)) {
-        return { ok: false, reason: "size-filter" };
+        return { ok: false, reason: REASONS.SIZE_FILTER };
       }
     } catch {
       plan.postSizeEnforce = true;
@@ -83,13 +84,13 @@ async function startDownloadForPlan(plan, settings, batchDate, closeOnStart = fa
 
   const downloadId = await startDownloadWithBookkeeping(plan, settings, batchDate, hasSizeRule, f, closeOnStart);
   if (typeof downloadId !== "number") {
-    return { ok: false, reason: "no-download" };
+    return { ok: false, reason: REASONS.NO_DOWNLOAD };
   }
   return { ok: true, downloadId };
 }
 
 function shouldSkipTask(reason) {
-  return reason === "filtered" || reason === "size-filter";
+  return reason === REASONS.FILTERED || reason === REASONS.SIZE_FILTER;
 }
 
 async function finalizeTaskFailure(taskId, reason, { retryOnComplete = false } = {}) {
@@ -99,7 +100,7 @@ async function finalizeTaskFailure(taskId, reason, { retryOnComplete = false } =
     return;
   }
   const status = retryOnComplete ? "pending" : "failed";
-  const lastError = retryOnComplete ? "no-download" : (reason || "no-download");
+  const lastError = retryOnComplete ? REASONS.NO_DOWNLOAD : (reason || REASONS.NO_DOWNLOAD);
   await updateTask(taskId, { status, lastError });
 }
 
@@ -152,9 +153,9 @@ export async function runDownload({ mode }) {
 
   if (!order.length) {
     console.log("[Download Media Tabs] Nothing to download after filtering.");
-    if (traceCtx.reasonCounts.has("no-site-access")) {
+    if (traceCtx.reasonCounts.has(REASONS.NO_SITE_ACCESS)) {
       console.warn("[Download Media Tabs] Probe blocked by missing site access. Grant site access (chrome://extensions or Performance → Request permissions) or disable strict detection.");
-    } else if (traceCtx.reasonCounts.has("probe-failed")) {
+    } else if (traceCtx.reasonCounts.has(REASONS.PROBE_FAILED)) {
       console.warn("[Download Media Tabs] Probe failed. Try reloading the tab or disabling strict detection.");
     }
     traceCtx.trace.note = "No downloads started (all URLs filtered).";
@@ -178,7 +179,7 @@ export async function runDownload({ mode }) {
   const markedEntries = markDuplicatesByUrl(taskEntries, (e) => e?.plan?.url);
   for (const entry of markedEntries) {
     if (entry.isDuplicate) {
-      await updateTask(entry.task.id, { status: "completed", lastError: "duplicate" });
+      await updateTask(entry.task.id, { status: "completed", lastError: REASONS.DUPLICATE });
       markTraceDuplicate(traceCtx, entry.tab?.id);
       if ((settings.autoCloseOnStart || settings.closeTabAfterDownload) && typeof entry.tab?.id === "number") {
         try {
@@ -193,7 +194,7 @@ export async function runDownload({ mode }) {
   const results = await Promise.allSettled(markedEntries.filter(e => !e.isDuplicate).map(entry => limitDl(async () => {
     const started = await startDownloadForPlan(entry.plan, settings, batchDate, closeOnStart);
     if (!started.ok) {
-      const reason = started.reason || "no-download";
+      const reason = started.reason || REASONS.NO_DOWNLOAD;
       await finalizeTaskFailure(entry.task.id, reason);
       markTraceFailure(traceCtx, entry.tab?.id, reason);
       return;
@@ -221,7 +222,7 @@ export async function runTaskForTab(tabOrId, taskId, opts = {}) {
     try { tab = await chrome.tabs.get(tabOrId); } catch { return; }
   }
   if (!tab || !tab.url) {
-    if (taskId) await updateTask(taskId, { status: "failed", lastError: "no-tab" });
+    if (taskId) await updateTask(taskId, { status: "failed", lastError: REASONS.NO_TAB });
     return;
   }
   try {
@@ -243,7 +244,7 @@ export async function runTaskForTab(tabOrId, taskId, opts = {}) {
   const result = await evaluateTabForPlan(tab, settings);
   if (!result.ok) {
     if (taskId) {
-      const reason = result.reason || "filtered";
+      const reason = result.reason || REASONS.FILTERED;
       await finalizeTaskFailure(taskId, reason, { retryOnComplete });
     }
     return;
@@ -253,7 +254,7 @@ export async function runTaskForTab(tabOrId, taskId, opts = {}) {
   const started = await startDownloadForPlan(result.plan, settings, batchDate, closeOnStart);
   if (!started.ok) {
     if (taskId) {
-      const reason = started.reason || "no-download";
+      const reason = started.reason || REASONS.NO_DOWNLOAD;
       await finalizeTaskFailure(taskId, reason, { retryOnComplete });
     }
     return;
