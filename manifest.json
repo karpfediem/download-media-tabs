@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Download Media Tabs",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "description": "Download all open tabs that are a single media file (image, audio, video, PDF).",
   "minimum_chrome_version": "114",
   "icons": {
@@ -20,7 +20,7 @@
   },
 
   "background": { "service_worker": "src/background.js", "type": "module" },
-  "permissions": ["tabs", "downloads", "scripting", "storage", "contextMenus"],
+  "permissions": ["tabs", "downloads", "scripting", "storage", "contextMenus", "alarms"],
   "optional_host_permissions": ["<all_urls>"],
   "options_page": "options/options.html"
 }
