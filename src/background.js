@@ -93,7 +93,7 @@ async function refreshAutoRunSetting() {
       autoCloseOnStart: false,
       autoRunPendingIntervalMin: 5,
       keepWindowOpenOnLastTabClose: false,
-      taskCleanupMaxAgeMin: 0,
+      taskCleanupMaxAgeMin: 30,
       taskCleanupMaxCount: 0
     });
     autoRunEnabled = !!obj.autoRunOnNewTabs;
@@ -105,7 +105,7 @@ async function refreshAutoRunSetting() {
     keepWindowOpenOnLastTabClose = !!obj.keepWindowOpenOnLastTabClose;
     taskCleanupMaxAgeMin = Number.isFinite(Number(obj.taskCleanupMaxAgeMin))
       ? Number(obj.taskCleanupMaxAgeMin)
-      : 0;
+      : 30;
     taskCleanupMaxCount = Number.isFinite(Number(obj.taskCleanupMaxCount))
       ? Number(obj.taskCleanupMaxCount)
       : 0;
@@ -115,7 +115,7 @@ async function refreshAutoRunSetting() {
     autoCloseOnStart = false;
     autoRunPendingIntervalMin = 5;
     keepWindowOpenOnLastTabClose = false;
-    taskCleanupMaxAgeMin = 0;
+    taskCleanupMaxAgeMin = 30;
     taskCleanupMaxCount = 0;
   } finally {
     autoRunLoaded = true;

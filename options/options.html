@@ -280,14 +280,8 @@
                             </select>
                         </label>
                     </div>
-                    <div class="row">
-                        <label>Pending task check (minutes)
-                            <input id="autoRunPendingIntervalMin" type="number" min="0" step="1" />
-                        </label>
-                    </div>
                     <label class="inline"><input type="checkbox" id="autoCloseOnStart"> Close tab immediately after download starts</label>
                     <p class="note">When enabled, the extension will try to download new tabs based on the timing above. Respects all filters and post-actions.</p>
-                    <p class="note">Set pending task check to 0 to disable periodic re-checks. Pending tasks will only resolve on tab updates or when you click Start/Retry.</p>
                     <p class="note">Close-on-start applies to any download started by the extension (auto-run or manual).</p>
                     <p class="note">Auto-close only happens if a download actually starts.</p>
                 </fieldset>
@@ -337,20 +331,6 @@
                     </table>
                     <p class="note">Retry opens the URL in a background tab and re‑attempts the download.</p>
                     <p class="note">Removing a task only removes it from the queue; it does not delete downloaded files.</p>
-                    <fieldset>
-                        <legend>Task cleanup</legend>
-                        <div class="row">
-                            <label>Remove completed/failed tasks older than (minutes)
-                                <input id="taskCleanupMaxAgeMin" type="number" min="0" step="1" />
-                            </label>
-                        </div>
-                        <div class="row">
-                            <label>Keep at most (FIFO)
-                                <input id="taskCleanupMaxCount" type="number" min="0" step="1" />
-                            </label>
-                        </div>
-                        <p class="note">Set a value to 0 to disable that cleanup rule. Cleanup never removes pending or started tasks.</p>
-                    </fieldset>
                     <details class="task-trace" id="taskTraceDetails">
                         <summary>Last run trace</summary>
                         <div id="taskTraceMeta" class="note"></div>
@@ -383,6 +363,22 @@
                             <tbody id="taskTraceTbody"></tbody>
                         </table>
                     </details>
+                </fieldset>
+                <fieldset>
+                    <legend>Task maintenance</legend>
+                    <div class="row">
+                        <label>Pending task check (minutes)
+                            <input id="autoRunPendingIntervalMin" type="number" min="0" step="1" />
+                        </label>
+                        <label>Remove tasks older than (minutes)
+                            <input id="taskCleanupMaxAgeMin" type="number" min="0" step="1" />
+                        </label>
+                        <label>Keep at most (FIFO)
+                            <input id="taskCleanupMaxCount" type="number" min="0" step="1" />
+                        </label>
+                    </div>
+                    <p class="note">Set a value to 0 to disable that rule. Pending tasks will only resolve on tab updates or when you click Start/Retry.</p>
+                    <p class="note">Cleanup never removes pending or started tasks.</p>
                 </fieldset>
             </section>
 
