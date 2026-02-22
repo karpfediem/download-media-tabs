@@ -321,6 +321,7 @@
                         </label>
                         <button id="taskClearCompleted" class="task-clear" type="button">Clear completed</button>
                         <button id="taskClearFailed" class="task-clear" type="button">Clear failed</button>
+                        <button id="taskClearAll" class="task-clear" type="button">Clear all</button>
                     </div>
                     <div id="tasksEmpty" class="note">No tasks yet.</div>
                     <table class="tasks-table" id="tasksTable">
@@ -336,6 +337,20 @@
                     </table>
                     <p class="note">Retry opens the URL in a background tab and re‑attempts the download.</p>
                     <p class="note">Removing a task only removes it from the queue; it does not delete downloaded files.</p>
+                    <fieldset>
+                        <legend>Task cleanup</legend>
+                        <div class="row">
+                            <label>Remove completed/failed tasks older than (minutes)
+                                <input id="taskCleanupMaxAgeMin" type="number" min="0" step="1" />
+                            </label>
+                        </div>
+                        <div class="row">
+                            <label>Keep at most (FIFO)
+                                <input id="taskCleanupMaxCount" type="number" min="0" step="1" />
+                            </label>
+                        </div>
+                        <p class="note">Set a value to 0 to disable that cleanup rule. Cleanup never removes pending or started tasks.</p>
+                    </fieldset>
                     <details class="task-trace" id="taskTraceDetails">
                         <summary>Last run trace</summary>
                         <div id="taskTraceMeta" class="note"></div>
@@ -353,6 +368,7 @@
                                 <input id="traceSearch" type="text" placeholder="Filter by URL substring">
                             </label>
                             <label class="inline"><input type="checkbox" id="traceShowFiltered"> Show filtered items</label>
+                            <button id="taskTraceClear" class="task-clear" type="button">Clear trace</button>
                         </div>
                         <div id="taskTraceEmpty" class="note">No trace yet.</div>
                         <table class="tasks-table" id="taskTraceTable">

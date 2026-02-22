@@ -2,7 +2,7 @@
 // Saves everything to chrome.storage.sync using DEFAULTS that come from shared src/constants.js.
 
 import { DEFAULT_SETTINGS as DEFAULTS } from "../src/constants.js";
-import { getTasks, clearTasksByStatus, removeTask } from "../src/tasksState.js";
+import { getTasks, clearTasksByStatus, clearAllTasks, removeTask } from "../src/tasksState.js";
 
 // ---------- Utilities ----------
 
@@ -138,6 +138,8 @@ function sanitizeSettingsInput(input) {
     // After
     sanitized.closeTabAfterDownload = !!cfg.closeTabAfterDownload;
     sanitized.keepWindowOpenOnLastTabClose = !!cfg.keepWindowOpenOnLastTabClose;
+    sanitized.taskCleanupMaxAgeMin = clampInt(cfg.taskCleanupMaxAgeMin, 0, 525600, DEFAULTS.taskCleanupMaxAgeMin);
+    sanitized.taskCleanupMaxCount = clampInt(cfg.taskCleanupMaxCount, 0, 500, DEFAULTS.taskCleanupMaxCount);
 
     // Filters
     sanitized.filtersEnabled = !!cfg.filtersEnabled;
@@ -282,6 +284,18 @@ function load() {
         // After
         $("closeTabAfterDownload").checked = !!safeCfg.closeTabAfterDownload;
         $("keepWindowOpenOnLastTabClose").checked = !!safeCfg.keepWindowOpenOnLastTabClose;
+        $("taskCleanupMaxAgeMin").value = clampInt(
+            safeCfg.taskCleanupMaxAgeMin,
+            0,
+            525600,
+            DEFAULTS.taskCleanupMaxAgeMin
+        );
+        $("taskCleanupMaxCount").value = clampInt(
+            safeCfg.taskCleanupMaxCount,
+            0,
+            500,
+            DEFAULTS.taskCleanupMaxCount
+        );
 
         // Filters
         const filters = safeMergeFilters(DEFAULTS.filters, safeCfg.filters);
@@ -368,6 +382,18 @@ function buildConfigFromUI() {
         // After
         closeTabAfterDownload: $("closeTabAfterDownload").checked,
         keepWindowOpenOnLastTabClose: $("keepWindowOpenOnLastTabClose").checked,
+        taskCleanupMaxAgeMin: clampInt(
+            $("taskCleanupMaxAgeMin").value,
+            0,
+            525600,
+            DEFAULTS.taskCleanupMaxAgeMin
+        ),
+        taskCleanupMaxCount: clampInt(
+            $("taskCleanupMaxCount").value,
+            0,
+            500,
+            DEFAULTS.taskCleanupMaxCount
+        ),
 
         // Filters
         filtersEnabled,
@@ -470,6 +496,7 @@ function pickSettingsOnly(obj) {
         'probeConcurrency','downloadConcurrency',
         'autoRunOnNewTabs','autoRunTiming','autoCloseOnStart','autoRunPendingIntervalMin',
         'closeTabAfterDownload','keepWindowOpenOnLastTabClose',
+        'taskCleanupMaxAgeMin','taskCleanupMaxCount',
         'filtersEnabled','filters'
     ];
     const out = {};
@@ -667,11 +694,17 @@ function formatTaskReason(task) {
         "no-download": "Download did not start",
         "size-filter": "Blocked by size filter",
         "duplicate": "Duplicate URL (skipped)",
+        "ext-mismatch": "File type mismatch",
         "tab-closed": "Tab closed",
         "interrupted": "Download interrupted",
         "no-tab": "Tab no longer exists",
         "started": "Download started"
     };
+    if (code === "ext-mismatch") {
+        const expected = task?.expectedExt ? `.${task.expectedExt}` : "expected type";
+        const actual = task?.actualExt ? `.${task.actualExt}` : (task?.actualMime ? task.actualMime : "unknown type");
+        return `Type mismatch (expected ${expected}, got ${actual}). Check Performance → Allow pre-fetching sites (Request permissions now) or enable strict detection.`;
+    }
     return map[code] || code;
 }
 
@@ -921,6 +954,10 @@ document.addEventListener("DOMContentLoaded", () => {
             clearTasksByStatus("failed").then(renderTasks);
             return;
         }
+        if (id === "taskClearAll") {
+            clearAllTasks().then(renderTasks);
+            return;
+        }
         if (id === "resetInferUrlAllowedExtensions") {
             $("inferUrlAllowedExtensions").value = (DEFAULTS.inferUrlAllowedExtensions || []).join("\n");
             updateSaveEnabled();
@@ -966,6 +1003,10 @@ document.addEventListener("DOMContentLoaded", () => {
             if (taskId) {
                 removeTask(taskId).then(renderTasks);
             }
+            return;
+        }
+        if (id === "taskTraceClear") {
+            chrome.storage.local.set({ dmtLastRunTrace: null }, renderRunTrace);
             return;
         }
         if (t.dataset?.action === 'applyPreset') applyPresetByName(t.dataset.name);

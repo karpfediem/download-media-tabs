@@ -2,6 +2,8 @@ import { getSettings } from './settings.js';
 import { closeTabRespectingWindow } from './closeTab.js';
 import { updateTaskByDownloadId, removeTaskByDownloadId } from './tasksState.js';
 import { interruptedUpdate } from './taskStatus.js';
+import { MEDIA_EXTENSIONS } from './constants.js';
+import { REASONS } from './reasons.js';
 import {
   storageSessionGet,
   storageSessionSet,
@@ -57,13 +59,14 @@ async function loadState() {
   } catch {}
 }
 
-export async function setDownloadTabMapping(downloadId, tabId, tabUrl, downloadUrl, closeOnStart = false) {
+export async function setDownloadTabMapping(downloadId, tabId, tabUrl, downloadUrl, closeOnStart = false, expectedExt = "") {
   if (typeof downloadId !== "number" || typeof tabId !== "number") return;
   downloadIdToMeta.set(downloadId, {
     tabId,
     tabUrl: tabUrl || "",
     downloadUrl: downloadUrl || "",
-    closeOnStart: !!closeOnStart
+    closeOnStart: !!closeOnStart,
+    expectedExt: expectedExt || ""
   });
   await persistState();
 }
@@ -95,6 +98,51 @@ export async function clearPendingSizeConstraint(downloadId) {
 }
 
 try { loadState(); } catch {}
+
+function normalizeExt(ext) {
+  if (!ext) return "";
+  const map = { jpeg: "jpg", jpe: "jpg", tiff: "tif", htm: "html" };
+  let out = String(ext).toLowerCase().replace(/^\.+/, "");
+  if (map[out]) out = map[out];
+  return out;
+}
+
+function extFromFilename(filename) {
+  if (!filename) return "";
+  const base = String(filename).split(/[\\/]/).pop();
+  if (!base) return "";
+  const m = /\.([A-Za-z0-9]+)$/.exec(base);
+  return m ? m[1].toLowerCase() : "";
+}
+
+function typeFromMime(mime) {
+  if (!mime) return "";
+  const m = String(mime).toLowerCase();
+  if (m === "application/pdf") return "pdf";
+  if (m.startsWith("image/")) return "image";
+  if (m.startsWith("video/")) return "video";
+  if (m.startsWith("audio/")) return "audio";
+  if (m.startsWith("text/html")) return "html";
+  return "";
+}
+
+function typeFromExt(ext) {
+  if (!ext) return "";
+  const mime = MEDIA_EXTENSIONS.get(ext);
+  if (!mime) return "";
+  return typeFromMime(mime);
+}
+
+function shouldWarnMismatch(expectedExt, actualExt, actualMime) {
+  const expected = normalizeExt(expectedExt);
+  const actual = normalizeExt(actualExt);
+  if (!expected || expected === "bin" || !MEDIA_EXTENSIONS.has(expected)) return false;
+  if (actual) return actual !== expected;
+  const expectedType = typeFromExt(expected);
+  const actualMimeType = typeFromMime(actualMime || "");
+  if (!actualMimeType || !expectedType) return false;
+  return actualMimeType !== expectedType;
+}
 
 downloadsOnChangedAddListener(async (delta) => {
   if (!delta || typeof delta.id !== "number") return;
@@ -132,14 +180,16 @@ downloadsOnChangedAddListener(async (delta) => {
     const tabId = meta && typeof meta.tabId === "number" ? meta.tabId : null;
     const tabUrl = meta && typeof meta.tabUrl === "string" ? meta.tabUrl : "";
     const downloadUrl = meta && typeof meta.downloadUrl === "string" ? meta.downloadUrl : (meta && typeof meta.url === "string" ? meta.url : "");
+    let item = null;
     try {
       if (pendingSizeConstraints.has(id)) {
         const { minBytes, maxBytes } = pendingSizeConstraints.get(id);
         await clearPendingSizeConstraint(id);
 
-        const [item] = await downloadsSearch({ id });
+        const [found] = await downloadsSearch({ id });
+        item = found || null;
         const finalBytes = item && Number.isFinite(item.fileSize) ? item.fileSize
-            : (item && Number.isFinite(item.bytesReceived) ? item.bytesReceived : -1);
+          : (item && Number.isFinite(item.bytesReceived) ? item.bytesReceived : -1);
 
         const tooSmall = (minBytes > 0 && finalBytes >= 0 && finalBytes < minBytes);
         const tooLarge = (maxBytes > 0 && finalBytes >= 0 && finalBytes > maxBytes);
@@ -151,6 +201,11 @@ downloadsOnChangedAddListener(async (delta) => {
           await clearDownloadTabMapping(id);
           return;
         }
+      }
+
+      if (!item) {
+        const [found] = await downloadsSearch({ id });
+        item = found || null;
       }
 
       const settings = await getSettings();
@@ -170,7 +225,20 @@ downloadsOnChangedAddListener(async (delta) => {
         }
         await closeTabRespectingWindow(tabId, settings);
       }
-      await updateTaskByDownloadId(id, { status: "completed" });
+      const expectedExt = meta && typeof meta.expectedExt === "string" ? meta.expectedExt : "";
+      const actualExt = item ? extFromFilename(item.filename) : "";
+      const actualMime = item && typeof item.mime === "string" ? item.mime : "";
+      if (shouldWarnMismatch(expectedExt, actualExt, actualMime)) {
+        await updateTaskByDownloadId(id, {
+          status: "completed",
+          lastError: REASONS.EXT_MISMATCH,
+          expectedExt: normalizeExt(expectedExt),
+          actualExt: normalizeExt(actualExt),
+          actualMime: actualMime || ""
+        });
+      } else {
+        await updateTaskByDownloadId(id, { status: "completed" });
+      }
     } finally {
       await clearDownloadTabMapping(id);
     }

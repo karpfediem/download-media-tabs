@@ -50,7 +50,9 @@ async function startDownloadWithBookkeeping(p, settings, batchDate, hasSizeRule,
   });
 
   if (typeof downloadId === 'number') {
-    if (p.tabId != null) await setDownloadTabMapping(downloadId, p.tabId, p.tabUrl || "", p.url, closeOnStart);
+    if (p.tabId != null) {
+      await setDownloadTabMapping(downloadId, p.tabId, p.tabUrl || "", p.url, closeOnStart, p.ext);
+    }
     if (hasSizeRule && !p.bypassFilters && p.postSizeEnforce) {
       await setPendingSizeConstraint(downloadId, { minBytes: f.minBytes, maxBytes: f.maxBytes });
     }

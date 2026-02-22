@@ -41,6 +41,8 @@
  * @property {string} autoRunTiming
  * @property {boolean} autoCloseOnStart
  * @property {number} autoRunPendingIntervalMin
+ * @property {number} taskCleanupMaxAgeMin
+ * @property {number} taskCleanupMaxCount
  * @property {string[]} allowedOrigins
  * @property {boolean} filtersEnabled
  * @property {Filters} filters

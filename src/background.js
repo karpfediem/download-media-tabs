@@ -3,7 +3,15 @@
 
 import { setDefaultContextMenus, installActionClick, installContextMenuClick } from './menus.js';
 import { runDownload, runTaskForTab } from './downloadOrchestrator.js';
-import { upsertTask, updateTask, getTasks, getTaskById, markTasksForClosedTab, findTaskByTabUrlKind } from './tasksState.js';
+import {
+  upsertTask,
+  updateTask,
+  getTasks,
+  getTaskById,
+  markTasksForClosedTab,
+  findTaskByTabUrlKind,
+  cleanupTasks
+} from './tasksState.js';
 import { hasActiveDownloadForTab } from './downloadsState.js';
 import './downloadsState.js'; // side-effect: installs downloads onChanged listener
 import { isFileSchemeAllowed } from './fileAccess.js';
@@ -48,9 +56,13 @@ let autoRunTiming = "start";
 let autoCloseOnStart = false;
 let keepWindowOpenOnLastTabClose = false;
 let autoRunPendingIntervalMin = 5;
+let taskCleanupMaxAgeMin = 0;
+let taskCleanupMaxCount = 0;
 const lastProcessedUrlByTab = new Map();
 const manualRetryByTabId = new Map();
 const PENDING_ALARM = "dmt-pending-tasks";
+const CLEANUP_ALARM = "dmt-task-cleanup";
+const CLEANUP_INTERVAL_MIN = 5;
 
 function schedulePendingAlarm() {
   if (!autoRunEnabled || autoRunPendingIntervalMin <= 0) {
@@ -65,6 +77,14 @@ function schedulePendingAlarm() {
   alarmsCreate(PENDING_ALARM, { periodInMinutes: interval });
 }
 
+function scheduleCleanupAlarm() {
+  if (taskCleanupMaxAgeMin <= 0 && taskCleanupMaxCount <= 0) {
+    alarmsClear(CLEANUP_ALARM);
+    return;
+  }
+  alarmsCreate(CLEANUP_ALARM, { periodInMinutes: CLEANUP_INTERVAL_MIN });
+}
+
 async function refreshAutoRunSetting() {
   try {
     const obj = await storageSyncGet({
@@ -72,7 +92,9 @@ async function refreshAutoRunSetting() {
       autoRunTiming: "start",
       autoCloseOnStart: false,
       autoRunPendingIntervalMin: 5,
-      keepWindowOpenOnLastTabClose: false
+      keepWindowOpenOnLastTabClose: false,
+      taskCleanupMaxAgeMin: 0,
+      taskCleanupMaxCount: 0
     });
     autoRunEnabled = !!obj.autoRunOnNewTabs;
     autoRunTiming = (obj.autoRunTiming === "start" || obj.autoRunTiming === "complete") ? obj.autoRunTiming : "start";
@@ -81,15 +103,27 @@ async function refreshAutoRunSetting() {
       ? Number(obj.autoRunPendingIntervalMin)
       : 5;
     keepWindowOpenOnLastTabClose = !!obj.keepWindowOpenOnLastTabClose;
+    taskCleanupMaxAgeMin = Number.isFinite(Number(obj.taskCleanupMaxAgeMin))
+      ? Number(obj.taskCleanupMaxAgeMin)
+      : 0;
+    taskCleanupMaxCount = Number.isFinite(Number(obj.taskCleanupMaxCount))
+      ? Number(obj.taskCleanupMaxCount)
+      : 0;
   } catch {
     autoRunEnabled = false;
     autoRunTiming = "start";
     autoCloseOnStart = false;
     autoRunPendingIntervalMin = 5;
     keepWindowOpenOnLastTabClose = false;
+    taskCleanupMaxAgeMin = 0;
+    taskCleanupMaxCount = 0;
   } finally {
     autoRunLoaded = true;
     schedulePendingAlarm();
+    scheduleCleanupAlarm();
+    if (taskCleanupMaxAgeMin > 0 || taskCleanupMaxCount > 0) {
+      try { await cleanupTasks({ maxAgeMin: taskCleanupMaxAgeMin, maxCount: taskCleanupMaxCount }); } catch {}
+    }
   }
 }
 
@@ -217,6 +251,22 @@ addStorageOnChangedListener((changes, area) => {
     autoRunPendingIntervalMin = Number.isFinite(next) ? next : 5;
     schedulePendingAlarm();
   }
+  if (Object.prototype.hasOwnProperty.call(changes, 'taskCleanupMaxAgeMin')) {
+    const next = Number(changes.taskCleanupMaxAgeMin.newValue);
+    taskCleanupMaxAgeMin = Number.isFinite(next) ? next : 0;
+    scheduleCleanupAlarm();
+    if (taskCleanupMaxAgeMin > 0 || taskCleanupMaxCount > 0) {
+      try { cleanupTasks({ maxAgeMin: taskCleanupMaxAgeMin, maxCount: taskCleanupMaxCount }); } catch {}
+    }
+  }
+  if (Object.prototype.hasOwnProperty.call(changes, 'taskCleanupMaxCount')) {
+    const next = Number(changes.taskCleanupMaxCount.newValue);
+    taskCleanupMaxCount = Number.isFinite(next) ? next : 0;
+    scheduleCleanupAlarm();
+    if (taskCleanupMaxAgeMin > 0 || taskCleanupMaxCount > 0) {
+      try { cleanupTasks({ maxAgeMin: taskCleanupMaxAgeMin, maxCount: taskCleanupMaxCount }); } catch {}
+    }
+  }
   if (Object.prototype.hasOwnProperty.call(changes, 'keepWindowOpenOnLastTabClose')) {
     keepWindowOpenOnLastTabClose = !!changes.keepWindowOpenOnLastTabClose.newValue;
   }
@@ -234,8 +284,14 @@ addTabsOnRemovedListener((tabId) => {
 });
 
 addAlarmsOnAlarmListener((alarm) => {
-  if (!alarm || alarm.name !== PENDING_ALARM) return;
-  try { processPendingTasks(); } catch {}
+  if (!alarm) return;
+  if (alarm.name === PENDING_ALARM) {
+    try { processPendingTasks(); } catch {}
+    return;
+  }
+  if (alarm.name === CLEANUP_ALARM) {
+    try { cleanupTasks({ maxAgeMin: taskCleanupMaxAgeMin, maxCount: taskCleanupMaxCount }); } catch {}
+  }
 });
 
 addTabsOnUpdatedListener(async (tabId, changeInfo, tab) => {

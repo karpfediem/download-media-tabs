@@ -6,6 +6,7 @@ export const REASONS = {
   SIZE_FILTER: "size-filter",
   NO_DOWNLOAD: "no-download",
   DUPLICATE: "duplicate",
+  EXT_MISMATCH: "ext-mismatch",
   INTERRUPTED: "interrupted",
   TAB_CLOSED: "tab-closed",
   NO_TAB: "no-tab"

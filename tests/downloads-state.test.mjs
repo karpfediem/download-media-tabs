@@ -135,4 +135,29 @@ const { getTasks } = tasksState;
   assert.equal(downloadsState.downloadIdToMeta.has(5), false);
 }
 
+// 6) Completed download warns on extension mismatch
+{
+  resetState(downloadsState);
+  await resetTasksStorage();
+  storage.sync = { closeTabAfterDownload: false, keepWindowOpenOnLastTabClose: false };
+  await createTaskWithDownloadId({ tabId: 6, url: "https://example.com/file.jpg", downloadId: 6 });
+  await setDownloadTabMapping(6, 6, "https://example.com/file.jpg", "https://example.com/file.jpg", false, "jpg");
+  searchResults.set(6, [{
+    id: 6,
+    filename: "/tmp/file.html",
+    mime: "text/html",
+    bytesReceived: 10,
+    fileSize: 10
+  }]);
+
+  const listener = onChangedListener.current || globalThis.__dmtOnChangedListener;
+  await listener({ id: 6, state: { current: "complete" } });
+
+  const tasks = await getTasks();
+  assert.equal(tasks[0].status, "completed");
+  assert.equal(tasks[0].lastError, "ext-mismatch");
+  assert.equal(tasks[0].expectedExt, "jpg");
+  assert.equal(tasks[0].actualExt, "html");
+}
+
 console.log("downloads-state.test.mjs passed");

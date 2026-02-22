@@ -40,6 +40,8 @@ export const DEFAULT_SETTINGS = {
   autoRunTiming: "start",
   autoCloseOnStart: false,
   autoRunPendingIntervalMin: 5,
+  taskCleanupMaxAgeMin: 0,
+  taskCleanupMaxCount: 0,
   // User-managed whitelist of sites (Chrome match patterns) for which the extension may request access at runtime
   allowedOrigins: [],
   filtersEnabled: false,
