@@ -4,6 +4,7 @@ await import("./task-utils.test.mjs");
 await import("./task-pipeline.test.mjs");
 await import("./filters.test.mjs");
 await import("./downloads-state.test.mjs");
+await import("./tasks-cleanup.test.mjs");
 await import("./selection.test.mjs");
 await import("./background-autorun.test.mjs");
 await import("./decision-edge.test.mjs");
