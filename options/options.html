@@ -387,6 +387,8 @@
                 <fieldset>
                     <legend>Single-media detection</legend>
                     <label><input type="checkbox" id="strictSingleDetection"> Strict single-media detection (recommended)</label>
+                    <p class="warning"><strong>Note:</strong> Strict mode probes the page, which requires site access. If access isn’t granted, strict checks are skipped and the extension falls back to URL/MIME hints. Grant access via Performance → Allow pre‑fetching sites → Request permissions (or in <span class="kbd">chrome://extensions</span>).</p>
+                    <p class="note">Example: Wikimedia “File:” pages can look like images but actually return HTML. Without strict mode and site access, URL hints can misfire and download a .html file.</p>
                     <div class="row">
                         <label>Viewport coverage threshold
                             <input id="coverageThreshold" type="number" min="0" max="1" step="0.05" />
@@ -395,10 +397,6 @@
                     <p class="note">
                         In strict mode, a page qualifies only if it has exactly one media element, it is a direct child of <span class="kbd">&lt;body&gt;</span>,
                         and it covers the given fraction of the viewport.
-                    </p>
-                    <p class="note">
-                        Strict mode probes the page, which requires site access. If access isn’t granted, strict checks are skipped and the extension falls back to URL/MIME hints.
-                        Grant access via <strong>Performance → Allow pre‑fetching sites → Request permissions</strong> (or in <span class="kbd">chrome://extensions</span>).
                     </p>
                 </fieldset>
 
